@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/yuvaneswaren.github.io/CS-529_VDS_Project/static/css/main.c376eac2.css",
+    "main.js": "/yuvaneswaren.github.io/CS-529_VDS_Project/static/js/main.33fc0f52.js",
+    "static/js/453.9157db5f.chunk.js": "/yuvaneswaren.github.io/CS-529_VDS_Project/static/js/453.9157db5f.chunk.js",
+    "index.html": "/yuvaneswaren.github.io/CS-529_VDS_Project/index.html",
+    "main.c376eac2.css.map": "/yuvaneswaren.github.io/CS-529_VDS_Project/static/css/main.c376eac2.css.map",
+    "main.33fc0f52.js.map": "/yuvaneswaren.github.io/CS-529_VDS_Project/static/js/main.33fc0f52.js.map",
+    "453.9157db5f.chunk.js.map": "/yuvaneswaren.github.io/CS-529_VDS_Project/static/js/453.9157db5f.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.c376eac2.css",
+    "static/js/main.33fc0f52.js"
+  ]
+}
