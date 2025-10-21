@@ -5,7 +5,7 @@
 
 ---
 
-## 🌟 Overview
+## Overview
 
 This project builds a **visual analytics tool** that helps nonprofit leaders in Chicago understand how their governance structures compare with peers. Using publicly available IRS Form 990 data, we explore how board size, independence, committee coverage, and executive compensation relate to organizational stability.
 
@@ -20,7 +20,7 @@ Our goal is to make nonprofit governance data more interpretable, trustworthy, a
 
 ---
 
-## 🎯 Objectives
+## Objectives
 
 - Deliver **decision-ready visualizations** for governance benchmarking.  
 - Create a **clean data pipeline** that transforms Form 990 filings into analysis-ready tables.  
@@ -29,7 +29,7 @@ Our goal is to make nonprofit governance data more interpretable, trustworthy, a
 
 ---
 
-## 🧩 Repository Structure
+## Repository Structure
 
 ```
 .
@@ -52,7 +52,7 @@ Our goal is to make nonprofit governance data more interpretable, trustworthy, a
 
 ---
 
-## 🧠 Tech Stack
+## Tech Stack
 
 - **Frontend:** D3.js, JavaScript (ES6), HTML5, CSS3  
 - **Data Sources:**  
@@ -62,12 +62,12 @@ Our goal is to make nonprofit governance data more interpretable, trustworthy, a
 
 ---
 
-## 👥 Team
+## Team
 
-**Developer / Project Lead**  
+**Project Manager**  
 **Yuvaneswaren Ramakrishnan Sureshbabu**  
-Department of Computer Science, University of Illinois Chicago  
-Specialization: Visual Data Science, Interactive Analytics, and Full-stack Web Development  
+**Team Members**
+**Shrinisha Nirmalkumar, Jegadit Sakthi Saravanan**
 
 **Client / Domain Expert**  
 **Prof. John W. Lynch**  
@@ -76,7 +76,7 @@ Expertise: Leadership education, organizational governance, and applied benchmar
 
 ---
 
-## 📅 Project Timeline (Fall 2025)
+## Project Timeline (Fall 2025)
 
 | Week | Dates | Key Focus |
 |------|--------|-----------|
@@ -89,14 +89,14 @@ Expertise: Leadership education, organizational governance, and applied benchmar
 
 ---
 
-## 🧾 Acknowledgment
+## Acknowledgment
 
 The starter code and visualization template are based on coursework materials originally created by **Andrew Wentzel**.  
 We thank him for providing the foundation that helped launch this project.
 
 ---
 
-## ⚙️ Getting Started
+## Getting Started
 
 1. Clone the repository:  
    ```bash
@@ -107,7 +107,7 @@ We thank him for providing the foundation that helped launch this project.
 
 ---
 
-## 📜 License
+## License
 
 This repository was created for academic use within the Visual Data Science course at the University of Illinois Chicago.  
 Please keep attribution intact in any derived work or reuse.
