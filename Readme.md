@@ -64,10 +64,8 @@ Our goal is to make nonprofit governance data more interpretable, trustworthy, a
 
 ## Team
 
-**Project Manager**  
-**Yuvaneswaren Ramakrishnan Sureshbabu**  
-**Team Members**
-**Shrinisha Nirmalkumar, Jegadit Sakthi Saravanan**
+**Project Manager** - **Yuvaneswaren Ramakrishnan Sureshbabu**  
+**Team Members** - **Shrinisha Nirmalkumar, Jegadit Sakthi Saravanan**
 
 **Client / Domain Expert**  
 **Prof. John W. Lynch**  
