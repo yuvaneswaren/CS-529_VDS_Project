@@ -1,18 +1,12 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import "../layout.css";
 
-const Header = () => {
-  const navigate = useNavigate();
+function Header() {
   return (
-    <div style={{ background: "#eee", padding: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <h3 style={{ margin: 0 }}>Leadership Levers in Nonprofit Governance: Peer Benchmarks for Chicago Using Form 990 Data (Placeholder, Demo)</h3>
-
-      <div style={{ display: "flex", gap: "15px" }}>
-        <button onClick={() => navigate("/")}>Summary View</button>
-        <button onClick={() => navigate("/compare")}>Comparative View</button>
-      </div>
-    </div>
+    <header className="app-header">
+      <h2>Chicago Nonprofit Peer Benchmark Dashboard</h2>
+    </header>
   );
-};
+}
 
 export default Header;
