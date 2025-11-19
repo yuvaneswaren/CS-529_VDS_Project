@@ -1,46 +1,31 @@
-// import logo from './logo.svg';
-// import './App.css';
+import React, { useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import MainPage from "./pages/MainPage";
+import SummaryPage from "./pages/SummaryPage";
+import ComparePage from "./pages/ComparePage";
 
-// function App() {
-//   return (
-//     <div className="App">
-//       <header className="App-header">
-//         <img src={logo} className="App-logo" alt="logo" />
-//         <p>
-//           Edit <code>src/App.js</code> and save to reload.
-//         </p>
-//         <a
-//           className="App-link"
-//           href="https://reactjs.org"
-//           target="_blank"
-//           rel="noopener noreferrer"
-//         >
-//           Learn React
-//         </a>
-//       </header>
-//     </div>
-//   );
-// }
+function RouteRedirect() {
+  const navigate = useNavigate();
+  const location = useLocation();
 
-// export default App;
+  useEffect(() => {
+    const isHome = location.pathname === "/";
+    if (!isHome) navigate("/", { replace: true });
+  }, []);
 
-
-
-import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import SummaryView from "./pages/SummaryView";
-import SearchResultsView from "./pages/SearchResultsView";
-import ComparativeView from "./pages/ComparativeView";
+  return null;
+}
 
 function App() {
   return (
-    <BrowserRouter>
+    <Router>
+      <RouteRedirect />
       <Routes>
-        <Route path="/" element={<SummaryView />} />
-        <Route path="/search" element={<SearchResultsView />} />
-        <Route path="/compare" element={<ComparativeView />} />
+        <Route path="/" element={<MainPage />} />
+        <Route path="/summary" element={<SummaryPage />} />
+        <Route path="/compare" element={<ComparePage />} />
       </Routes>
-    </BrowserRouter>
+    </Router>
   );
 }
 
