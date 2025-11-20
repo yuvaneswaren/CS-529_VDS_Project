@@ -4,7 +4,7 @@ import "../layout.css";
 function Header() {
   return (
     <header className="app-header">
-      <h2>Chicago Nonprofit Peer Benchmark Dashboard</h2>
+      <h2>Illinois Nonprofit Peer Benchmark Dashboard</h2>
     </header>
   );
 }
