@@ -169,7 +169,7 @@ const NteeTreemap = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
         parentLabelPadding={4}
         parentLabelTextColor={{
           from: "color",
-          modifiers: [["brighter", 3]],
+          modifiers: [["darker", 3]],
         }}
         borderWidth={1}
         borderColor={{
