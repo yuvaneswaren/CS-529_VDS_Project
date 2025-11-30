@@ -8,15 +8,22 @@
 // import { scaleBand } from "d3-scale";
 // import { max } from "d3-array";
 // import { interpolateBlues } from "d3-scale-chromatic";
-// import { rgb } from "d3-color";
+// import { useTheme, Typography } from "@mui/material";
+// import { tokens } from "../theme";
 
-// const HeatmapBase = ({ data, title = "Average Revenue by City & NTEE Category" }) => {
+// const HeatmapBase = ({
+//   data,
+//   title = "Average Revenue by City & NTEE Category",
+// }) => {
+//   const theme = useTheme();
+//   const colors = tokens(theme.palette.mode);
+
 //   const containerRef = useRef(null);
 //   const [size, setSize] = useState({ width: 800, height: 400 });
 //   const [hoverInfo, setHoverInfo] = useState(null);
 
 //   // Margins around the heatmap
-//   const margin = { top: 40, right: 20, bottom: 80, left: 140 };
+//   const margin = { top: 30, right: 10, bottom: 90, left: 120 };
 
 //   // Measure container (responsive)
 //   useLayoutEffect(() => {
@@ -25,7 +32,7 @@
 //     const observer = new ResizeObserver((entries) => {
 //       const rect = entries[0].contentRect;
 //       const width = Math.max(rect.width, 300);
-//       const height = Math.max(rect.height, 200);
+//       const height = Math.max(rect.height, 220);
 //       setSize({ width, height });
 //     });
 
@@ -38,7 +45,7 @@
 //       return {
 //         xScale: null,
 //         yScale: null,
-//         colorScale: () => "#f5f5f5",
+//         colorScale: () => colors.primary[400],
 //         values: [],
 //         xLabels: [],
 //         yLabels: [],
@@ -70,10 +77,11 @@
 
 //     const maxValue = nonZeroValues.length ? max(nonZeroValues) : 0;
 
+//     // Color: non-zero cells in blue scale, zero cells in subtle theme-matching color
 //     const color = (v) => {
-//       if (!maxValue || v <= 0) return "#f1f5f9"; // light gray for zero
+//       if (!maxValue || v <= 0) return colors.primary[500]; // subtle background-ish color
 //       const ratio = v / maxValue;
-//       const t = 0.25 + 0.75 * Math.sqrt(ratio); // boost small values
+//       const t = 0.25 + 0.75 * Math.sqrt(ratio);
 //       return interpolateBlues(t);
 //     };
 
@@ -85,7 +93,15 @@
 //       xLabels: data.xLabels,
 //       yLabels: data.yLabels,
 //     };
-//   }, [data, size, margin.bottom, margin.left, margin.right, margin.top]);
+//   }, [
+//     data,
+//     size,
+//     margin.bottom,
+//     margin.left,
+//     margin.right,
+//     margin.top,
+//     colors.primary,
+//   ]);
 
 //   const getRelativePosition = (e) => {
 //     if (!containerRef.current) return { x: 0, y: 0 };
@@ -102,7 +118,13 @@
 //         ref={containerRef}
 //         style={{ width: "100%", height: "100%" }}
 //       >
-//         Loading Heatmap...
+//         <Typography
+//           variant="body2"
+//           color={colors.grey[100]}
+//           sx={{ p: 1 }}
+//         >
+//           Loading heatmap...
+//         </Typography>
 //       </div>
 //     );
 //   }
@@ -119,21 +141,21 @@
 //       <svg
 //         viewBox={`0 0 ${size.width} ${size.height}`}
 //         style={{
-//           width: "99%",
+//           width: "100%",
 //           height: "100%",
-//           background: rgb(244, 244, 244),
-//           borderRadius: "12px",
+//           // Let the parent MUI Box background show through
+//           background: "transparent",
 //           display: "block",
 //         }}
 //       >
-//         {/* Title */}
+//         {/* Title (use theme colors instead of hardcoded) */}
 //         <text
-//           x={size.width / 2}
-//           y={22}
+//           x={size.width * 0.35}
+//           y={margin.top - 13}
 //           textAnchor="middle"
 //           fontSize={14}
 //           fontWeight={600}
-//           fill="#0f172a"
+//           fill={colors.grey[100]}
 //           fontFamily="system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
 //         >
 //           {title}
@@ -169,7 +191,7 @@
 //                 onMouseMove={(e) => {
 //                   const pos = getRelativePosition(e);
 //                   setHoverInfo((prev) =>
-//                     prev ? { ...prev, ...getRelativePosition(e) } : prev
+//                     prev ? { ...prev, x: pos.x, y: pos.y } : prev
 //                   );
 //                 }}
 //                 onMouseLeave={() => setHoverInfo(null)}
@@ -193,8 +215,8 @@
 //                 y={labelY}
 //                 textAnchor="end"
 //                 transform={`rotate(-45 ${cx}, ${labelY})`}
-//                 fontSize={10}
-//                 fill="#111827"
+//                 fontSize={9}
+//                 fill={colors.grey[100]}
 //                 fontFamily="system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
 //               >
 //                 {city}
@@ -215,8 +237,8 @@
 //                 y={y + yScale.bandwidth() / 2}
 //                 textAnchor="end"
 //                 dy="0.35em"
-//                 fontSize={10}
-//                 fill="#111827"
+//                 fontSize={9}
+//                 fill={colors.grey[100]}
 //                 fontFamily="system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
 //               >
 //                 {cat}
@@ -230,20 +252,20 @@
 //           x={size.width / 2}
 //           y={size.height - 6}
 //           textAnchor="middle"
-//           fontSize={12}
-//           fill="#374151"
+//           fontSize={11}
+//           fill={colors.grey[100]}
 //           fontFamily="system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
 //         >
-//           City (Top 20 by Total Revenue)
+//           City (Top 10 by Total Revenue)
 //         </text>
 
 //         <text
-//           x={16}
+//           x={20}
 //           y={margin.top + (size.height - margin.top - margin.bottom) / 2}
 //           textAnchor="middle"
-//           fontSize={12}
-//           fill="#374151"
-//           transform={`rotate(-90 16, ${
+//           fontSize={11}
+//           fill={colors.grey[100]}
+//           transform={`rotate(-90 20, ${
 //             margin.top + (size.height - margin.top - margin.bottom) / 2
 //           })`}
 //           fontFamily="system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
@@ -252,32 +274,33 @@
 //         </text>
 //       </svg>
 
-//       {/* Tooltip */}
+//       {/* Tooltip – themed to match the dashboard */}
 //       {hoverInfo && (
 //         <div
 //           style={{
 //             position: "absolute",
 //             left: hoverInfo.x + 12,
 //             top: hoverInfo.y + 12,
-//             background: "rgba(15,23,42,0.96)",
-//             color: "#f9fafb",
+//             background: colors.primary[600],
+//             color: colors.grey[100],
 //             padding: "8px 12px",
-//             borderRadius: "10px",
+//             borderRadius: "8px",
 //             fontSize: 12,
 //             fontFamily:
 //               "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-//             boxShadow: "0 10px 25px rgba(0,0,0,0.35)",
+//             boxShadow: "0 8px 18px rgba(0,0,0,0.4)",
 //             pointerEvents: "none",
 //             maxWidth: 260,
 //             lineHeight: 1.4,
 //             zIndex: 10,
+//             border: `1px solid ${colors.grey[300]}`,
 //           }}
 //         >
 //           <div style={{ fontWeight: 600, marginBottom: 4 }}>
 //             {hoverInfo.city} · {hoverInfo.category}
 //           </div>
 //           <div>
-//             Average revenue:{" "}
+//             Avg:{" "}$
 //             {hoverInfo.value.toLocaleString(undefined, {
 //               maximumFractionDigits: 0,
 //             })}
@@ -299,9 +322,12 @@ import React, {
 } from "react";
 import { scaleBand } from "d3-scale";
 import { max } from "d3-array";
-import { interpolateBlues } from "d3-scale-chromatic";
-import { useTheme, Typography } from "@mui/material";
+// import { interpolateBlues } from "d3-scale-chromatic";
+import { interpolateGreens } from "d3-scale-chromatic";
+import { useTheme, Typography, IconButton, Box } from "@mui/material";
 import { tokens } from "../theme";
+
+const PAGE_SIZE = 13; // 13 NTEE categories per page
 
 const HeatmapBase = ({
   data,
@@ -313,6 +339,7 @@ const HeatmapBase = ({
   const containerRef = useRef(null);
   const [size, setSize] = useState({ width: 800, height: 400 });
   const [hoverInfo, setHoverInfo] = useState(null);
+  const [page, setPage] = useState(0); // current Y-axis page
 
   // Margins around the heatmap
   const margin = { top: 30, right: 10, bottom: 90, left: 120 };
@@ -332,7 +359,28 @@ const HeatmapBase = ({
     return () => observer.disconnect();
   }, []);
 
-  const { xScale, yScale, colorScale, values, xLabels, yLabels } = useMemo(() => {
+  // Total pages based on full yLabels length
+  const totalPages = useMemo(() => {
+    if (!data?.yLabels?.length) return 1;
+    return Math.max(1, Math.ceil(data.yLabels.length / PAGE_SIZE));
+  }, [data]);
+
+  // Clamp page if data changes / pages shrink
+  if (page > totalPages - 1) {
+    // simple sync; safe in render because it stabilizes quickly
+    // but if you prefer, you can move this into a useEffect
+    // eslint-disable-next-line no-console
+    setPage(totalPages - 1);
+  }
+
+  const {
+    xScale,
+    yScale,
+    colorScale,
+    values,
+    xLabels,
+    yLabels,
+  } = useMemo(() => {
     if (!data || !data.values || !data.xLabels || !data.yLabels) {
       return {
         xScale: null,
@@ -344,6 +392,20 @@ const HeatmapBase = ({
       };
     }
 
+    // Top 10 cities only
+    const pageXLabels = data.xLabels.slice(0, 10);
+
+    // Current page of NTEE categories
+    const startIdx = page * PAGE_SIZE;
+    const endIdx = startIdx + PAGE_SIZE;
+    const pageYLabels = data.yLabels.slice(startIdx, endIdx);
+
+    const filteredValues = data.values.filter(
+      (d) =>
+        pageXLabels.includes(d.city) &&
+        pageYLabels.includes(d.category)
+    );
+
     const innerWidth = Math.max(
       size.width - margin.left - margin.right,
       10
@@ -354,39 +416,39 @@ const HeatmapBase = ({
     );
 
     const x = scaleBand()
-      .domain(data.xLabels)
+      .domain(pageXLabels)
       .range([margin.left, margin.left + innerWidth])
       .padding(0.02);
 
     const y = scaleBand()
-      .domain(data.yLabels)
+      .domain(pageYLabels)
       .range([margin.top, margin.top + innerHeight])
       .padding(0.02);
 
-    const nonZeroValues = data.values
+    const nonZeroValues = filteredValues
       .filter((d) => d.value > 0)
       .map((d) => d.value);
 
     const maxValue = nonZeroValues.length ? max(nonZeroValues) : 0;
 
-    // Color: non-zero cells in blue scale, zero cells in subtle theme-matching color
     const color = (v) => {
-      if (!maxValue || v <= 0) return colors.primary[500]; // subtle background-ish color
+      if (!maxValue || v <= 0) return colors.primary[500];
       const ratio = v / maxValue;
       const t = 0.25 + 0.75 * Math.sqrt(ratio);
-      return interpolateBlues(t);
+      return interpolateGreens(t);
     };
 
     return {
       xScale: x,
       yScale: y,
       colorScale: color,
-      values: data.values,
-      xLabels: data.xLabels,
-      yLabels: data.yLabels,
+      values: filteredValues,
+      xLabels: pageXLabels,
+      yLabels: pageYLabels,
     };
   }, [
     data,
+    page,
     size,
     margin.bottom,
     margin.left,
@@ -435,12 +497,11 @@ const HeatmapBase = ({
         style={{
           width: "100%",
           height: "100%",
-          // Let the parent MUI Box background show through
           background: "transparent",
           display: "block",
         }}
       >
-        {/* Title (use theme colors instead of hardcoded) */}
+        {/* Title */}
         <text
           x={size.width * 0.35}
           y={margin.top - 13}
@@ -566,7 +627,51 @@ const HeatmapBase = ({
         </text>
       </svg>
 
-      {/* Tooltip – themed to match the dashboard */}
+      {/* Page controls (inside chart area) */}
+      {totalPages > 1 && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: 4,
+            right: 8,
+            display: "flex",
+            alignItems: "center",
+            gap: 0.5,
+            backgroundColor: colors.primary[600],
+            borderRadius: "999px",
+            px: 1,
+            py: 0.2,
+            boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+          }}
+        >
+          <IconButton
+            size="small"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            sx={{ color: colors.grey[100], p: 0.5 }}
+          >
+            {"<"}
+          </IconButton>
+          <Typography
+            variant="caption"
+            sx={{ color: colors.grey[100] }}
+          >
+            Page {page + 1} / {totalPages}
+          </Typography>
+          <IconButton
+            size="small"
+            onClick={() =>
+              setPage((p) => Math.min(totalPages - 1, p + 1))
+            }
+            disabled={page === totalPages - 1}
+            sx={{ color: colors.grey[100], p: 0.5 }}
+          >
+            {">"}
+          </IconButton>
+        </Box>
+      )}
+
+      {/* Tooltip */}
       {hoverInfo && (
         <div
           style={{
@@ -592,7 +697,7 @@ const HeatmapBase = ({
             {hoverInfo.city} · {hoverInfo.category}
           </div>
           <div>
-            Avg:{" "}$
+            Avg: $
             {hoverInfo.value.toLocaleString(undefined, {
               maximumFractionDigits: 0,
             })}
