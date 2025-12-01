@@ -1,31 +1,29 @@
-import React, { useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from "react-router-dom";
-import MainPage from "./pages/MainPage";
-import SummaryPage from "./pages/SummaryPage";
-import ComparePage from "./pages/ComparePage";
+import { useState } from "react";
+import { Routes, Route } from "react-router-dom";
+import Topbar from "./scenes/global/Topbar";
+import Dashboard from "./scenes/dashboard";
 
-function RouteRedirect() {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    const isHome = location.pathname === "/";
-    if (!isHome) navigate("/", { replace: true });
-  }, []);
-
-  return null;
-}
+import { CssBaseline, ThemeProvider } from "@mui/material";
+import { ColorModeContext, useMode } from "./theme";
 
 function App() {
+  const [theme, colorMode] = useMode();
+  const [isSidebar, setIsSidebar] = useState(true);
+
   return (
-    <Router>
-      <RouteRedirect />
-      <Routes>
-        <Route path="/" element={<MainPage />} />
-        <Route path="/summary" element={<SummaryPage />} />
-        <Route path="/compare" element={<ComparePage />} />
-      </Routes>
-    </Router>
+    <ColorModeContext.Provider value={colorMode}>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <div className="app">
+          <main className="content">
+            <Topbar setIsSidebar={setIsSidebar} />
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+            </Routes>
+          </main>
+        </div>
+      </ThemeProvider>
+    </ColorModeContext.Provider>
   );
 }
 
