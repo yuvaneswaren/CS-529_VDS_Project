@@ -111,14 +111,53 @@ const Dashboard = () => {
           flexDirection="column"
           minHeight={0}
         >
-          <Typography
-            color={colors.grey[100]}
-            variant="h5"
-            fontWeight="600"
+          {/* Header row with title and legend */}
+          <Box 
+            display="flex" 
+            justifyContent="space-between" 
+            alignItems="center"
             mb={0.5}
           >
-            Revenue vs Margin Momentum - Mission {selectedMission} cohort
-          </Typography>
+            <Typography
+              color={colors.grey[100]}
+              variant="h5"
+              fontWeight="600"
+            >
+              Revenue vs Margin Momentum - Mission {selectedMission} cohort
+            </Typography>
+            
+            {/* Legend - inline with header */}
+            <Box display="flex" alignItems="center" gap={2}>
+              <Box display="flex" alignItems="center" gap={0.5}>
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    backgroundColor: colors.grey[200],
+                    border: '1px solid #111827'
+                  }}
+                />
+                <Typography variant="caption" color={colors.grey[300]} fontSize={10}>
+                  Dot: 2019 (Click dot for details)
+                </Typography>
+              </Box>
+              <Box display="flex" alignItems="center" gap={0.5}>
+                <Box
+                  sx={{
+                    width: 0,
+                    height: 0,
+                    borderLeft: '5px solid transparent',
+                    borderRight: '5px solid transparent',
+                    borderBottom: `8px solid ${colors.redAccent[400]}`
+                  }}
+                />
+                <Typography variant="caption" color={colors.grey[300]} fontSize={10}>
+                  Arrowhead: 2023
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
 
           <Typography
             color={colors.grey[300]}

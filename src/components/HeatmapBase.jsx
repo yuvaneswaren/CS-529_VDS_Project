@@ -503,7 +503,7 @@ const HeatmapBase = ({
       >
         {/* Title */}
         <text
-          x={size.width * 0.35}
+          x={size.width * 0.37}
           y={margin.top - 13}
           textAnchor="middle"
           fontSize={14}

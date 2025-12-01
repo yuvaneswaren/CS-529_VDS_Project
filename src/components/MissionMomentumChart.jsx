@@ -1,12 +1,71 @@
 // src/components/MissionMomentumChart.jsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useTheme } from "@mui/material";
 import { tokens } from "../theme";
 import * as d3 from "d3";
 import Papa from "papaparse";
+import OrganizationPopup from "./OrganizationPopup";
 
 const DEFAULT_MISSION = "E";         // default letter if nothing selected
 const DEFAULT_CSV_URL = "/il_nonprofits_orgs.csv";
+
+// Helper function to build organization data for popup from CSV row
+function buildOrganizationDataForPopup(orgId, orgName, ntee_letter, city, rows) {
+  // Find the full row data for this organization
+  const orgRow = rows.find(row => (row.ein || row.EIN) === orgId);
+  if (!orgRow) {
+    console.log("Could not find org row for:", orgId);
+    return null;
+  }
+
+  const years = [];
+  
+  for (let k = 1; k <= 5; k++) {
+    const taxYear = orgRow[`yr${k}_tax_year`];
+    const totalRevenue = orgRow[`yr${k}_totrevenue`];
+    const totalExpenses = orgRow[`yr${k}_totfuncexpns`];
+    const contributions = orgRow[`yr${k}_totcntrbs`];
+    const programRevenue = orgRow[`yr${k}_prgmservrev`];
+    const investmentIncome = orgRow[`yr${k}_invstmntinc`] || orgRow[`yr${k}_othrinvstinc`] || 0;
+    const surplus = orgRow[`yr${k}_rev_minus_exp`];
+    const marginPct = orgRow[`yr${k}_margin_pct`];
+    
+    // Asset-related fields for Asset Utilization Stream chart
+    const totalAssets = orgRow[`yr${k}_totassetsend`] || 0;
+    const totalLiabilities = orgRow[`yr${k}_totliabend`] || 0;
+    const netAssets = orgRow[`yr${k}_totnetassetsend`] || 0;
+    
+    if (taxYear && totalRevenue) {
+      years.push({
+        year: taxYear,
+        totalRevenue: totalRevenue || 0,
+        totalExpenses: totalExpenses || 0,
+        contributions: contributions || 0,
+        programRevenue: programRevenue || 0,
+        investmentIncome: investmentIncome || 0,
+        surplus: surplus || 0,
+        marginPct: marginPct || 0,
+        // Asset fields
+        totalAssets: totalAssets,
+        totalLiabilities: totalLiabilities,
+        netAssets: netAssets
+      });
+    }
+  }
+
+  // Sort years descending (most recent first)
+  years.sort((a, b) => b.year - a.year);
+
+  console.log("Built popup data:", { orgId, orgName, years: years.length });
+
+  return {
+    ein: orgId,
+    name: orgName,
+    ntee_letter: ntee_letter,
+    city: city || orgRow.city || orgRow.CITY || "Chicago",
+    years: years
+  };
+}
 
 function buildTrajectories(rows) {
   const byOrg = new Map();
@@ -19,6 +78,7 @@ function buildTrajectories(rows) {
 
     const missionRaw = row.ntee_letter || row.NTEE_LETTER || "";
     const orgName = row.name || row.NAME || row.orgname || row.ORGNAME || "";
+    const city = row.city || row.CITY || "";
 
     const points = [];
     for (let k = 1; k <= 5; k += 1) {
@@ -51,6 +111,7 @@ function buildTrajectories(rows) {
     byOrg.set(orgId, {
       orgId,
       orgName,
+      city,
       ntee_letter: String(missionRaw || "U").trim().toUpperCase(),
       points,
     });
@@ -76,7 +137,8 @@ const MissionMomentumChart = ({
   selectedMission,
 }) => {
   const theme = useTheme();
-  const colors = tokens(theme.palette.mode);
+  const themeMode = theme.palette.mode;
+  const colors = useMemo(() => tokens(themeMode), [themeMode]);
 
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState(null);
@@ -85,9 +147,14 @@ const MissionMomentumChart = ({
   const [lastYear, setLastYear] = useState(null);
 
   const [hover, setHover] = useState(null);
-  const [highlightOrgId, setHighlightOrgId] = useState(null);
+  
+  // State for popup
+  const [selectedOrg, setSelectedOrg] = useState(null);
 
   const containerRef = useRef(null);
+  
+  // Use ref to store rawRows for access in D3 callbacks
+  const rawRowsRef = useRef([]);
 
   const missionLetter =
     (selectedMission && String(selectedMission).toUpperCase()) ||
@@ -105,6 +172,8 @@ const MissionMomentumChart = ({
       complete: (results) => {
         try {
           const rows = results.data || [];
+          rawRowsRef.current = rows; // Store in ref for D3 callbacks
+          
           const { trajectories: traj, minYear, maxYear } =
             buildTrajectories(rows);
 
@@ -126,14 +195,18 @@ const MissionMomentumChart = ({
     });
   }, [csvUrl]);
 
+  // Close popup handler
+  const handleClosePopup = useCallback(() => {
+    setSelectedOrg(null);
+  }, []);
+
   // Main draw effect, rerun when data or missionLetter changes
   useEffect(() => {
     if (status !== "ready") return;
     const host = containerRef.current;
     if (!host) return;
 
-    // Reset highlight state when mission changes
-    setHighlightOrgId(null);
+    // Reset hover state when mission changes
     setHover(null);
 
     const svgWidth = host.clientWidth || 800;
@@ -380,66 +453,24 @@ const MissionMomentumChart = ({
       })
       .attr("opacity", 0.95);
 
-    arcs
-      .on("mouseenter", (event, d) => {
-        setHighlightOrgId(d.orgId);
-        
-        // Update opacity for all arcs and dots
-        arcs.attr("opacity", (other) => other.orgId === d.orgId ? 0.95 : 0.15);
-        dots.attr("opacity", (other) => other.orgId === d.orgId ? 1 : 0.15);
-        
-        const first = d.points[0];
-        const last = d.points[d.points.length - 1];
-        setHover({
-          x: event.clientX,
-          y: event.clientY,
-          org: d.orgName || d.orgId,
-          startRev: first.log_revenue,
-          endRev: last.log_revenue,
-          startMargin: first.margin_pct,
-          endMargin: last.margin_pct,
-        });
-      })
-      .on("mousemove", (event, d) => {
-        const first = d.points[0];
-        const last = d.points[d.points.length - 1];
-        setHover({
-          x: event.clientX,
-          y: event.clientY,
-          org: d.orgName || d.orgId,
-          startRev: first.log_revenue,
-          endRev: last.log_revenue,
-          startMargin: first.margin_pct,
-          endMargin: last.margin_pct,
-        });
-      })
-      .on("mouseleave", () => {
-        setHighlightOrgId(null);
-        setHover(null);
-        
-        // Reset all to normal opacity
-        arcs.attr("opacity", 0.95);
-        dots.attr("opacity", 1);
-      });
-
-    // Starting dots
+    // Starting dots - FIRST define, then add event handlers
     const dots = plot
       .selectAll("circle.mm-start")
       .data(finalData)
       .join("circle")
       .attr("class", "mm-start")
-      .attr("r", 3)
+      .attr("r", 3) // Dot size
       .attr("fill", colors.grey[200])
       .attr("stroke", "#111827")
       .attr("stroke-width", 0.8)
       .attr("cx", (d) => x(d.points[0].log_revenue))
       .attr("cy", (d) => y(d.points[0].margin_pct))
-      .attr("opacity", 1);
+      .attr("opacity", 1)
+      .style("cursor", "pointer"); // Add pointer cursor to indicate clickable
 
-    dots
+    // Add arc event handlers
+    arcs
       .on("mouseenter", (event, d) => {
-        setHighlightOrgId(d.orgId);
-        
         // Update opacity for all arcs and dots
         arcs.attr("opacity", (other) => other.orgId === d.orgId ? 0.95 : 0.15);
         dots.attr("opacity", (other) => other.orgId === d.orgId ? 1 : 0.15);
@@ -470,7 +501,6 @@ const MissionMomentumChart = ({
         });
       })
       .on("mouseleave", () => {
-        setHighlightOrgId(null);
         setHover(null);
         
         // Reset all to normal opacity
@@ -478,49 +508,74 @@ const MissionMomentumChart = ({
         dots.attr("opacity", 1);
       });
 
-    // Legend - positioned in top right corner of SVG
-    const legendX = svgWidth - 160;
-    const legendY = 12;
-
-    const legend = svg
-      .append("g")
-      .attr("transform", `translate(${legendX},${legendY})`);
-
-    legend
-      .append("circle")
-      .attr("cx", 0)
-      .attr("cy", 0)
-      .attr("r", 3)
-      .attr("fill", colors.grey[200])
-      .attr("stroke", "#111827")
-      .attr("stroke-width", 0.8);
-
-    legend
-      .append("path")
-      .attr("d", "M12,0 Q25,-8 38,0")
-      .attr("fill", "none")
-      .attr("stroke", startColor)
-      .attr("stroke-width", 1.5)
-      .attr("marker-end", "url(#mm-arrow)");
-
-    const labelYearStart = firstYear || "2019";
-    const labelYearEnd = lastYear || "2023";
-
-    legend
-      .append("text")
-      .attr("x", 0)
-      .attr("y", 14)
-      .attr("fill", colors.grey[200])
-      .attr("font-size", 9)
-      .text(`Dot: margin in ${labelYearStart}`);
-
-    legend
-      .append("text")
-      .attr("x", 0)
-      .attr("y", 25)
-      .attr("fill", colors.grey[200])
-      .attr("font-size", 9)
-      .text(`Arrowhead: margin in ${labelYearEnd}`);
+    // Add dot event handlers - including CLICK for popup
+    dots
+      .on("mouseenter", (event, d) => {
+        // Update opacity for all arcs and dots
+        arcs.attr("opacity", (other) => other.orgId === d.orgId ? 0.95 : 0.15);
+        dots.attr("opacity", (other) => other.orgId === d.orgId ? 1 : 0.15);
+        
+        // Enlarge the hovered dot
+        d3.select(event.currentTarget).attr("r", 5);
+        
+        const first = d.points[0];
+        const last = d.points[d.points.length - 1];
+        setHover({
+          x: event.clientX,
+          y: event.clientY,
+          org: d.orgName || d.orgId,
+          startRev: first.log_revenue,
+          endRev: last.log_revenue,
+          startMargin: first.margin_pct,
+          endMargin: last.margin_pct,
+        });
+      })
+      .on("mousemove", (event, d) => {
+        const first = d.points[0];
+        const last = d.points[d.points.length - 1];
+        setHover({
+          x: event.clientX,
+          y: event.clientY,
+          org: d.orgName || d.orgId,
+          startRev: first.log_revenue,
+          endRev: last.log_revenue,
+          startMargin: first.margin_pct,
+          endMargin: last.margin_pct,
+        });
+      })
+      .on("mouseleave", (event) => {
+        setHover(null);
+        
+        // Reset dot size
+        d3.select(event.currentTarget).attr("r", 3);
+        
+        // Reset all to normal opacity
+        arcs.attr("opacity", 0.95);
+        dots.attr("opacity", 1);
+      })
+      // CLICK HANDLER FOR POPUP - Use rawRowsRef.current to get latest data
+      .on("click", (event, d) => {
+        event.stopPropagation();
+        console.log("Dot clicked:", d.orgId, d.orgName);
+        
+        // Build popup data using ref (always has latest data)
+        const popupData = buildOrganizationDataForPopup(
+          d.orgId,
+          d.orgName,
+          d.ntee_letter,
+          d.city,
+          rawRowsRef.current
+        );
+        
+        console.log("Popup data:", popupData);
+        
+        if (popupData && popupData.years && popupData.years.length > 0) {
+          setSelectedOrg(popupData);
+        } else {
+          console.warn("No valid popup data for organization:", d.orgId);
+        }
+      });
+      
   }, [status, trajectories, missionLetter, colors, firstYear, lastYear]);
 
   if (status === "loading") {
@@ -550,47 +605,60 @@ const MissionMomentumChart = ({
   }
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        width: "100%",
-        height: "100%",
-        minHeight: 320,
-        position: "relative",
-      }}
-    >
-      {hover && (
-        <div
-          style={{
-            position: "fixed",
-            left: hover.x + 12,
-            top: hover.y + 12,
-            zIndex: 10,
-            background: colors.primary[500],
-            color: colors.grey[100],
-            border: `1px solid ${colors.grey[400]}`,
-            borderRadius: 4,
-            padding: "6px 10px",
-            fontSize: 11,
-            boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
-            pointerEvents: "none",
-            maxWidth: 260,
-          }}
-        >
-          <div style={{ fontWeight: 600, marginBottom: 2 }}>
-            {hover.org}
+    <>
+      <div
+        ref={containerRef}
+        style={{
+          width: "100%",
+          height: "100%",
+          minHeight: 320,
+          position: "relative",
+        }}
+      >
+        {hover && (
+          <div
+            style={{
+              position: "fixed",
+              left: hover.x + 12,
+              top: hover.y + 12,
+              zIndex: 10,
+              background: colors.primary[500],
+              color: colors.grey[100],
+              border: `1px solid ${colors.grey[400]}`,
+              borderRadius: 4,
+              padding: "6px 10px",
+              fontSize: 11,
+              boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+              pointerEvents: "none",
+              maxWidth: 260,
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>
+              {hover.org}
+            </div>
+            <div>
+              Log revenue: {hover.startRev.toFixed(2)} →{" "}
+              {hover.endRev.toFixed(2)}
+            </div>
+            <div>
+              Margin: {(hover.startMargin * 100).toFixed(1)}% →{" "}
+              {(hover.endMargin * 100).toFixed(1)}%
+            </div>
+            <div style={{ marginTop: 4, fontSize: 10, color: colors.greenAccent[400], fontStyle: 'italic' }}>
+
+            </div>
           </div>
-          <div>
-            Log revenue: {hover.startRev.toFixed(2)} →{" "}
-            {hover.endRev.toFixed(2)}
-          </div>
-          <div>
-            Margin: {(hover.startMargin * 100).toFixed(1)}% →{" "}
-            {(hover.endMargin * 100).toFixed(1)}%
-          </div>
-        </div>
+        )}
+      </div>
+      
+      {/* Organization Popup - renders when selectedOrg is set */}
+      {selectedOrg && (
+        <OrganizationPopup
+          organizationData={selectedOrg}
+          onClose={handleClosePopup}
+        />
       )}
-    </div>
+    </>
   );
 };
 
