@@ -50,7 +50,11 @@ const getShortLabel = (letter) => {
   return `${letter} (${short})`;
 };
 
-const NteeTreemap = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
+const NteeTreemap = ({
+  csvUrl = "/il_nonprofits_orgs.csv",
+  selectedMission,
+  onMissionSelect,
+}) => {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
 
@@ -72,7 +76,6 @@ const NteeTreemap = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
 
           const counts = {};
           rows.forEach((row) => {
-            // be a bit robust: support both ntee_letter and NTEE_LETTER
             const letterRaw = row.ntee_letter || row.NTEE_LETTER;
             if (!letterRaw || typeof letterRaw !== "string") return;
             const key = letterRaw.trim().toUpperCase();
@@ -111,7 +114,11 @@ const NteeTreemap = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
 
   if (status === "loading") {
     return (
-      <Typography variant="body2" color={colors.grey[100]} sx={{ p: 2 }}>
+      <Typography
+        variant="body2"
+        color={colors.grey[100]}
+        sx={{ p: 2 }}
+      >
         Loading treemap…
       </Typography>
     );
@@ -119,7 +126,11 @@ const NteeTreemap = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
 
   if (status === "error") {
     return (
-      <Typography variant="body2" color="error.main" sx={{ p: 2 }}>
+      <Typography
+        variant="body2"
+        color="error.main"
+        sx={{ p: 2 }}
+      >
         {error}
       </Typography>
     );
@@ -127,13 +138,16 @@ const NteeTreemap = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
 
   if (!treeData || !treeData.children || treeData.children.length === 0) {
     return (
-      <Typography variant="body2" color={colors.grey[100]} sx={{ p: 2 }}>
+      <Typography
+        variant="body2"
+        color={colors.grey[100]}
+        sx={{ p: 2 }}
+      >
         No NTEE data available.
       </Typography>
     );
   }
 
-  // 🔹 d3: build a numeric color scale based on counts
   const maxValue = Math.max(
     ...treeData.children.map((c) => c.value || 0),
     0
@@ -146,7 +160,6 @@ const NteeTreemap = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
           .range([interpolateBlues(0.6), interpolateBlues(0.95)])
       : () => colors.primary[500];
 
-  // 🔹 d3: nice integer formatter for counts
   const formatCount = format(",d");
 
   return (
@@ -158,9 +171,8 @@ const NteeTreemap = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
         margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
         innerPadding={3}
         outerPadding={3}
-        // ⬇️ use short label "B (Edu)" instead of just "B"
         label={(node) => getShortLabel(node.data.name)}
-        labelSkipSize={22} // a bit higher since label is longer
+        labelSkipSize={22}
         labelTextColor={{
           from: "color",
           modifiers: [["darker", 6]],
@@ -171,18 +183,17 @@ const NteeTreemap = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
           from: "color",
           modifiers: [["darker", 3]],
         }}
-        borderWidth={1}
-        borderColor={{
-          from: "color",
-          modifiers: [["darker", 0.3]],
-        }}
-        // nodeColor={(node) => colorScale(node.value || 0)}
-        // colors={{ scheme: "tableau10" }}
         colors={{ scheme: "green_blue" }}
-        // colors={{ scheme: "blues" }}
-        // colors={{ scheme: "greens" }}
-        nodeOpacity={1}           // <- removes visual transparency
-        // enableParentLabel={true}
+        nodeOpacity={1}
+        // highlight selected mission with thicker border
+        borderWidth={(node) =>
+          selectedMission && node.data.name === selectedMission ? 3 : 1
+        }
+        borderColor={(node) =>
+          selectedMission && node.data.name === selectedMission
+            ? colors.grey[100]
+            : colors.grey[800]
+        }
         theme={{
           textColor: colors.grey[100],
           tooltip: {
@@ -237,6 +248,12 @@ const NteeTreemap = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
         }}
         animate={true}
         motionConfig="gentle"
+        onClick={(node) => {
+          const letter = node.data.name;
+          if (letter && onMissionSelect) {
+            onMissionSelect(letter);
+          }
+        }}
       />
     </div>
   );
