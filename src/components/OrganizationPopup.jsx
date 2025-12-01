@@ -686,7 +686,7 @@ const OrganizationPopup = ({ organizationData, onClose }) => {
         bottom: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.85)',
         zIndex: 9999,
-        overflow: 'auto',
+        overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -699,9 +699,11 @@ const OrganizationPopup = ({ organizationData, onClose }) => {
           backgroundColor: '#141b2d',
           borderRadius: '16px',
           maxWidth: '1400px',
+          maxHeight: '95vh',
           width: '100%',
           p: 3,
-          position: 'relative'
+          position: 'relative',
+          overflow: 'auto'
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -805,7 +807,7 @@ const OrganizationPopup = ({ organizationData, onClose }) => {
                 ref={sankeyRef}
                 width="580"
                 height="400"
-                style={{ background: 'rgba(20, 27, 45, 0.6)', borderRadius: '8px' }}
+                style={{ background: 'rgba(20, 27, 45, 0.6)', borderRadius: '8px', maxWidth: '100%', height: 'auto' }}
               />
             </Box>
           </Box>
@@ -826,7 +828,7 @@ const OrganizationPopup = ({ organizationData, onClose }) => {
                 ref={streamRef}
                 width="580"
                 height="400"
-                style={{ background: 'rgba(20, 27, 45, 0.6)', borderRadius: '8px' }}
+                style={{ background: 'rgba(20, 27, 45, 0.6)', borderRadius: '8px', maxWidth: '100%', height: 'auto' }}
               />
             </Box>
           </Box>
