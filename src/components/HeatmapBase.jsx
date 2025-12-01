@@ -331,7 +331,7 @@ const PAGE_SIZE = 13; // 13 NTEE categories per page
 
 const HeatmapBase = ({
   data,
-  title = "Average Revenue by City & NTEE Category",
+  title = "Avg Revenue by City & NTEE Category",
 }) => {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
