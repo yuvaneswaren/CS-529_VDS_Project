@@ -18,14 +18,14 @@ const OrganizationPopup = ({ organizationData, onClose }) => {
     gridLine: 'rgba(77, 205, 172, 0.12)'
   };
 
-  // Year labels based on data slot position (reversed: oldest to newest)
-  // yr1 = 2019, yr2 = 2020, yr3 = 2021, yr4 = 2022, yr5 = 2023
+  // Year labels based on data slot position (REVERSED: Year 1 = newest, Year 5 = oldest)
+  // yr1 = 2023, yr2 = 2022, yr3 = 2021, yr4 = 2020, yr5 = 2019
   const slotToYearMap = {
-    1: '2019',
-    2: '2020',
+    1: '2023',
+    2: '2022',
     3: '2021',
-    4: '2022',
-    5: '2023'
+    4: '2020',
+    5: '2019'
   };
 
   // Helper function to get year label from slot number
@@ -365,7 +365,9 @@ const OrganizationPopup = ({ organizationData, onClose }) => {
     const g = svg.append('g')
       .attr('transform', `translate(${margin.left},${margin.top})`);
     
-    const sortedYears = [...data.years].sort((a, b) => (a.slot || 0) - (b.slot || 0));
+    // Sort years from oldest to newest for display (2019 to 2023, left to right)
+    // Since slot 1 = 2023 and slot 5 = 2019, we sort in DESCENDING slot order (5,4,3,2,1)
+    const sortedYears = [...data.years].sort((a, b) => (b.slot || 0) - (a.slot || 0));
     
     // Process data for Asset Utilization metrics
     const processedData = sortedYears.map((yr, i) => {
@@ -397,8 +399,9 @@ const OrganizationPopup = ({ organizationData, onClose }) => {
     });
     
     // X Scale - use point scale for discrete year labels (only show years with data)
+    // Explicitly sort domain to ensure 2019 appears first (left) and 2023 last (right)
     const xScale = d3.scalePoint()
-      .domain(processedData.map(d => d.yearLabel))
+      .domain(processedData.map(d => d.yearLabel).sort((a, b) => parseInt(a) - parseInt(b)))
       .range([0, innerWidth])
       .padding(0.5);
     
@@ -791,11 +794,21 @@ const OrganizationPopup = ({ organizationData, onClose }) => {
                     }
                   }}
                 >
-                  {availableYears.map((year, index) => (
-                    <ToggleButton key={year.slot || index} value={index}>
-                      {getYearLabel(year.slot || (index + 1))}
-                    </ToggleButton>
-                  ))}
+                  {/* Display years from 2019 to 2023 (oldest to newest) - DESIGN ONLY */}
+                  {availableYears
+                    .map((year, index) => ({
+                      year,
+                      index,
+                      yearLabel: getYearLabel(year.slot || (index + 1)),
+                      slot: year.slot || (index + 1)
+                    }))
+                    .sort((a, b) => parseInt(a.yearLabel) - parseInt(b.yearLabel)) // Sort by year ascending (2019->2023)
+                    .map(({ year, index, yearLabel, slot }) => (
+                      <ToggleButton key={slot} value={index}>
+                        {yearLabel}
+                      </ToggleButton>
+                    ))
+                  }
                 </ToggleButtonGroup>
               )}
             </Box>
@@ -821,7 +834,7 @@ const OrganizationPopup = ({ organizationData, onClose }) => {
               </Typography>
             </Box>
             <Typography sx={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', mb: 2 }}>
-              Height = asset productivity, color = debt ratio (Total Liabilities ÷ Total Assets)
+              Height = asset productivity, thickness = net assets, color = debt ratio
             </Typography>
             <Box sx={{ display: 'flex', justifyContent: 'center' }}>
               <svg
