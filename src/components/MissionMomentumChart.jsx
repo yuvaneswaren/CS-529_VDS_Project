@@ -6,12 +6,10 @@ import * as d3 from "d3";
 import Papa from "papaparse";
 import OrganizationPopup from "./OrganizationPopup";
 
-const DEFAULT_MISSION = "E";         // default letter if nothing selected
+const DEFAULT_MISSION = "E";
 const DEFAULT_CSV_URL = "/il_nonprofits_orgs.csv";
 
-// Helper function to build organization data for popup from CSV row
 function buildOrganizationDataForPopup(orgId, orgName, ntee_letter, city, rows) {
-  // Find the full row data for this organization
   const orgRow = rows.find(row => (row.ein || row.EIN) === orgId);
   if (!orgRow) {
     console.log("Could not find org row for:", orgId);
@@ -29,8 +27,6 @@ function buildOrganizationDataForPopup(orgId, orgName, ntee_letter, city, rows) 
     const investmentIncome = orgRow[`yr${k}_invstmntinc`] || orgRow[`yr${k}_othrinvstinc`] || 0;
     const surplus = orgRow[`yr${k}_rev_minus_exp`];
     const marginPct = orgRow[`yr${k}_margin_pct`];
-    
-    // Asset-related fields for Asset Utilization Stream chart
     const totalAssets = orgRow[`yr${k}_totassetsend`] || 0;
     const totalLiabilities = orgRow[`yr${k}_totliabend`] || 0;
     const netAssets = orgRow[`yr${k}_totnetassetsend`] || 0;
@@ -45,7 +41,6 @@ function buildOrganizationDataForPopup(orgId, orgName, ntee_letter, city, rows) 
         investmentIncome: investmentIncome || 0,
         surplus: surplus || 0,
         marginPct: marginPct || 0,
-        // Asset fields
         totalAssets: totalAssets,
         totalLiabilities: totalLiabilities,
         netAssets: netAssets
@@ -53,10 +48,7 @@ function buildOrganizationDataForPopup(orgId, orgName, ntee_letter, city, rows) 
     }
   }
 
-  // Sort years descending (most recent first)
   years.sort((a, b) => b.year - a.year);
-
-  console.log("Built popup data:", { orgId, orgName, years: years.length });
 
   return {
     ein: orgId,
@@ -135,6 +127,9 @@ function buildTrajectories(rows) {
 const MissionMomentumChart = ({
   csvUrl = DEFAULT_CSV_URL,
   selectedMission,
+  highlightedEIN = null,
+  onClearHighlight = null,
+  onEINMissionDetected = null
 }) => {
   const theme = useTheme();
   const themeMode = theme.palette.mode;
@@ -147,20 +142,17 @@ const MissionMomentumChart = ({
   const [lastYear, setLastYear] = useState(null);
 
   const [hover, setHover] = useState(null);
-  
-  // State for popup
+  const [pinnedTooltip, setPinnedTooltip] = useState(null);
   const [selectedOrg, setSelectedOrg] = useState(null);
 
   const containerRef = useRef(null);
-  
-  // Use ref to store rawRows for access in D3 callbacks
   const rawRowsRef = useRef([]);
 
   const missionLetter =
     (selectedMission && String(selectedMission).toUpperCase()) ||
     DEFAULT_MISSION;
 
-  // Load CSV and preprocess once
+  // Load CSV
   useEffect(() => {
     setStatus("loading");
     setError(null);
@@ -172,7 +164,7 @@ const MissionMomentumChart = ({
       complete: (results) => {
         try {
           const rows = results.data || [];
-          rawRowsRef.current = rows; // Store in ref for D3 callbacks
+          rawRowsRef.current = rows;
           
           const { trajectories: traj, minYear, maxYear } =
             buildTrajectories(rows);
@@ -195,19 +187,41 @@ const MissionMomentumChart = ({
     });
   }, [csvUrl]);
 
-  // Close popup handler
   const handleClosePopup = useCallback(() => {
     setSelectedOrg(null);
   }, []);
 
-  // Main draw effect, rerun when data or missionLetter changes
+  // Store the organization's position for tooltip placement
+  const highlightedOrgPositionRef = useRef(null);
+
+  // When highlightedEIN changes, find and select the mission
+  useEffect(() => {
+    if (highlightedEIN && trajectories.length > 0) {
+      const org = trajectories.find(t => String(t.orgId) === String(highlightedEIN));
+      if (org) {
+        console.log("Found EIN organization:", org.orgName, "Mission:", org.ntee_letter);
+        if (org.ntee_letter && onEINMissionDetected) {
+          onEINMissionDetected(org.ntee_letter);
+        }
+        
+        // Store org info for use in the draw effect
+        highlightedOrgPositionRef.current = org;
+      } else {
+        console.log("EIN not found in trajectories:", highlightedEIN);
+        highlightedOrgPositionRef.current = null;
+      }
+    } else {
+      // Clear pinned tooltip when highlight is removed
+      setPinnedTooltip(null);
+      highlightedOrgPositionRef.current = null;
+    }
+  }, [highlightedEIN, trajectories, onEINMissionDetected]);
+
+  // Main draw effect
   useEffect(() => {
     if (status !== "ready") return;
     const host = containerRef.current;
     if (!host) return;
-
-    // Reset hover state when mission changes
-    setHover(null);
 
     const svgWidth = host.clientWidth || 800;
     const svgHeight = host.clientHeight || 360;
@@ -227,10 +241,9 @@ const MissionMomentumChart = ({
 
     svg.selectAll("*").remove();
 
-    const cohort =
-      trajectories.filter(
-        (d) => d.ntee_letter === missionLetter
-      ) || [];
+    const cohort = trajectories.filter(
+      (d) => d.ntee_letter === missionLetter
+    ) || [];
 
     const data = cohort.length > 0 ? cohort : trajectories;
 
@@ -246,7 +259,7 @@ const MissionMomentumChart = ({
       return;
     }
 
-    // Collect all margin values from the current cohort
+    // Outlier filtering
     const allMargins = [];
     data.forEach((org) => {
       org.points.forEach((p) => {
@@ -254,23 +267,19 @@ const MissionMomentumChart = ({
       });
     });
 
-    // Compute median and MAD for robust outlier detection
     const medianMargin = d3.median(allMargins);
     const mad = d3.median(allMargins.map(v => Math.abs(v - medianMargin)));
     
-    // Define tight band around median using MAD
     const k = 4;
     const lowerMargin = medianMargin - k * mad;
     const upperMargin = medianMargin + k * mad;
 
-    // Filter out organizations with any point outside the band
     const filteredData = data.filter((org) => {
       return org.points.every((p) => {
         return p.margin_pct >= lowerMargin && p.margin_pct <= upperMargin;
       });
     });
 
-    // Fall back to original data if filtering removes everything
     const finalData = filteredData.length > 0 ? filteredData : data;
 
     const allRevenues = [];
@@ -283,7 +292,6 @@ const MissionMomentumChart = ({
       });
     });
 
-    // Add padding to the revenue domain for better spread
     const revExtent = d3.extent(allRevenues);
     const revPadding = (revExtent[1] - revExtent[0]) * 0.05;
 
@@ -293,7 +301,6 @@ const MissionMomentumChart = ({
       .nice()
       .range([margin.left, margin.left + innerWidth]);
 
-    // Use filtered margins for y scale domain
     const margExtent = d3.extent(finalMargins);
     const margPadding = (margExtent[1] - margExtent[0]) * 0.1;
 
@@ -352,7 +359,7 @@ const MissionMomentumChart = ({
       org.gradientId = gradId;
     });
 
-    // Gridlines - more visible
+    // Gridlines
     const grid = svg
       .append("g")
       .attr("stroke", colors.grey[600])
@@ -411,7 +418,6 @@ const MissionMomentumChart = ({
       .call(yAxis)
       .call((g) => g.select(".domain").remove())
       .call((g) => {
-        // Vertical y-axis label
         g.append("text")
           .attr("transform", "rotate(-90)")
           .attr("x", -(margin.top + innerHeight / 2))
@@ -436,7 +442,13 @@ const MissionMomentumChart = ({
       return `M${sx},${sy} Q${mx},${my} ${tx},${ty}`;
     };
 
-    // Arcs, with event handlers for tooltip and highlighting
+    // Determine initial opacity based on highlightedEIN
+    const getInitialOpacity = (d, type) => {
+      if (!highlightedEIN) return type === 'arc' ? 0.95 : 1;
+      return String(d.orgId) === String(highlightedEIN) ? (type === 'arc' ? 0.95 : 1) : 0.15;
+    };
+
+    // Arcs
     const arcs = plot
       .selectAll("path.mm-arc")
       .data(finalData)
@@ -451,30 +463,39 @@ const MissionMomentumChart = ({
         const last = d.points[d.points.length - 1];
         return arcPath(first, last);
       })
-      .attr("opacity", 0.95);
+      .attr("opacity", d => getInitialOpacity(d, 'arc'));
 
-    // Starting dots - FIRST define, then add event handlers
+    // Starting dots
     const dots = plot
       .selectAll("circle.mm-start")
       .data(finalData)
       .join("circle")
       .attr("class", "mm-start")
-      .attr("r", 3) // Dot size
+      .attr("r", 3)
       .attr("fill", colors.grey[200])
       .attr("stroke", "#111827")
       .attr("stroke-width", 0.8)
       .attr("cx", (d) => x(d.points[0].log_revenue))
       .attr("cy", (d) => y(d.points[0].margin_pct))
-      .attr("opacity", 1)
-      .style("cursor", "pointer"); // Add pointer cursor to indicate clickable
+      .attr("opacity", d => getInitialOpacity(d, 'dot'))
+      .style("cursor", "pointer");
 
-    // Add arc event handlers
+    // Arc event handlers - allow hover on other items while keeping searched EIN highlighted
     arcs
       .on("mouseenter", (event, d) => {
-        // Update opacity for all arcs and dots
-        arcs.attr("opacity", (other) => other.orgId === d.orgId ? 0.95 : 0.15);
-        dots.attr("opacity", (other) => other.orgId === d.orgId ? 1 : 0.15);
+        // Always allow hover highlights
+        arcs.attr("opacity", (other) => {
+          if (String(other.orgId) === String(d.orgId)) return 0.95;
+          if (highlightedEIN && String(other.orgId) === String(highlightedEIN)) return 0.95;
+          return 0.15;
+        });
+        dots.attr("opacity", (other) => {
+          if (String(other.orgId) === String(d.orgId)) return 1;
+          if (highlightedEIN && String(other.orgId) === String(highlightedEIN)) return 1;
+          return 0.15;
+        });
         
+        // Show hover tooltip for current item
         const first = d.points[0];
         const last = d.points[d.points.length - 1];
         setHover({
@@ -488,6 +509,7 @@ const MissionMomentumChart = ({
         });
       })
       .on("mousemove", (event, d) => {
+        // Update hover tooltip position
         const first = d.points[0];
         const last = d.points[d.points.length - 1];
         setHover({
@@ -501,23 +523,36 @@ const MissionMomentumChart = ({
         });
       })
       .on("mouseleave", () => {
+        // Clear hover tooltip
         setHover(null);
         
-        // Reset all to normal opacity
-        arcs.attr("opacity", 0.95);
-        dots.attr("opacity", 1);
+        // Restore opacity based on whether EIN is highlighted
+        if (highlightedEIN) {
+          arcs.attr("opacity", (d) => String(d.orgId) === String(highlightedEIN) ? 0.95 : 0.15);
+          dots.attr("opacity", (d) => String(d.orgId) === String(highlightedEIN) ? 1 : 0.15);
+        } else {
+          arcs.attr("opacity", 0.95);
+          dots.attr("opacity", 1);
+        }
       });
 
-    // Add dot event handlers - including CLICK for popup
+    // Dot event handlers - allow hover on other items while keeping searched EIN highlighted
     dots
       .on("mouseenter", (event, d) => {
-        // Update opacity for all arcs and dots
-        arcs.attr("opacity", (other) => other.orgId === d.orgId ? 0.95 : 0.15);
-        dots.attr("opacity", (other) => other.orgId === d.orgId ? 1 : 0.15);
-        
-        // Enlarge the hovered dot
+        // Always allow hover highlights
+        arcs.attr("opacity", (other) => {
+          if (String(other.orgId) === String(d.orgId)) return 0.95;
+          if (highlightedEIN && String(other.orgId) === String(highlightedEIN)) return 0.95;
+          return 0.15;
+        });
+        dots.attr("opacity", (other) => {
+          if (String(other.orgId) === String(d.orgId)) return 1;
+          if (highlightedEIN && String(other.orgId) === String(highlightedEIN)) return 1;
+          return 0.15;
+        });
         d3.select(event.currentTarget).attr("r", 5);
         
+        // Show hover tooltip for current item
         const first = d.points[0];
         const last = d.points[d.points.length - 1];
         setHover({
@@ -531,6 +566,7 @@ const MissionMomentumChart = ({
         });
       })
       .on("mousemove", (event, d) => {
+        // Update hover tooltip position
         const first = d.points[0];
         const last = d.points[d.points.length - 1];
         setHover({
@@ -544,21 +580,23 @@ const MissionMomentumChart = ({
         });
       })
       .on("mouseleave", (event) => {
+        // Clear hover tooltip
         setHover(null);
-        
-        // Reset dot size
         d3.select(event.currentTarget).attr("r", 3);
         
-        // Reset all to normal opacity
-        arcs.attr("opacity", 0.95);
-        dots.attr("opacity", 1);
+        // Restore opacity based on whether EIN is highlighted
+        if (highlightedEIN) {
+          arcs.attr("opacity", (d) => String(d.orgId) === String(highlightedEIN) ? 0.95 : 0.15);
+          dots.attr("opacity", (d) => String(d.orgId) === String(highlightedEIN) ? 1 : 0.15);
+        } else {
+          arcs.attr("opacity", 0.95);
+          dots.attr("opacity", 1);
+        }
       })
-      // CLICK HANDLER FOR POPUP - Use rawRowsRef.current to get latest data
       .on("click", (event, d) => {
         event.stopPropagation();
         console.log("Dot clicked:", d.orgId, d.orgName);
         
-        // Build popup data using ref (always has latest data)
         const popupData = buildOrganizationDataForPopup(
           d.orgId,
           d.orgName,
@@ -567,16 +605,52 @@ const MissionMomentumChart = ({
           rawRowsRef.current
         );
         
-        console.log("Popup data:", popupData);
-        
         if (popupData && popupData.years && popupData.years.length > 0) {
           setSelectedOrg(popupData);
-        } else {
-          console.warn("No valid popup data for organization:", d.orgId);
         }
       });
+
+    // Add click handler to plot area to clear highlight
+    svg.on("click", () => {
+      if (highlightedEIN && onClearHighlight) {
+        onClearHighlight();
+      }
+    });
+
+    // Set tooltip position for highlighted EIN after scales are defined
+    if (highlightedEIN && highlightedOrgPositionRef.current) {
+      const org = highlightedOrgPositionRef.current;
+      const first = org.points[0];
+      const last = org.points[org.points.length - 1];
       
-  }, [status, trajectories, missionLetter, colors, firstYear, lastYear]);
+      // Get the SVG element's position on the page
+      const svgRect = host.getBoundingClientRect();
+      
+      // Calculate the position of the end point (arrowhead) in SVG coordinates
+      const endX = x(last.log_revenue);
+      const endY = y(last.margin_pct);
+      
+      // Convert to page coordinates
+      const pageX = svgRect.left + endX;
+      const pageY = svgRect.top + endY;
+      
+      // Position tooltip to the right of the arrowhead
+      // Add offset to avoid covering the point
+      const tooltipX = pageX + 15;
+      const tooltipY = pageY - 30;
+      
+      setPinnedTooltip({
+        x: tooltipX,
+        y: tooltipY,
+        org: org.orgName || org.orgId,
+        startRev: first.log_revenue,
+        endRev: last.log_revenue,
+        startMargin: first.margin_pct,
+        endMargin: last.margin_pct,
+      });
+    }
+      
+  }, [status, trajectories, missionLetter, colors, highlightedEIN, onClearHighlight]);
 
   if (status === "loading") {
     return (
@@ -615,6 +689,38 @@ const MissionMomentumChart = ({
           position: "relative",
         }}
       >
+        {/* Pinned tooltip for searched EIN */}
+        {pinnedTooltip && (
+          <div
+            style={{
+              position: "fixed",
+              left: pinnedTooltip.x + 12,
+              top: pinnedTooltip.y + 12,
+              zIndex: 11,
+              background: colors.primary[500],
+              color: colors.grey[100],
+              border: `1px solid ${colors.grey[400]}`,
+              borderRadius: 4,
+              padding: "6px 10px",
+              fontSize: 11,
+              boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+              pointerEvents: "none",
+              maxWidth: 260,
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>
+              {pinnedTooltip.org}
+            </div>
+            <div>
+              Log revenue: {pinnedTooltip.startRev.toFixed(2)} → {pinnedTooltip.endRev.toFixed(2)}
+            </div>
+            <div>
+              Margin: {(pinnedTooltip.startMargin * 100).toFixed(1)}% → {(pinnedTooltip.endMargin * 100).toFixed(1)}%
+            </div>
+          </div>
+        )}
+        
+        {/* Hover tooltip for other items */}
         {hover && (
           <div
             style={{
@@ -637,21 +743,15 @@ const MissionMomentumChart = ({
               {hover.org}
             </div>
             <div>
-              Log revenue: {hover.startRev.toFixed(2)} →{" "}
-              {hover.endRev.toFixed(2)}
+              Log revenue: {hover.startRev.toFixed(2)} → {hover.endRev.toFixed(2)}
             </div>
             <div>
-              Margin: {(hover.startMargin * 100).toFixed(1)}% →{" "}
-              {(hover.endMargin * 100).toFixed(1)}%
-            </div>
-            <div style={{ marginTop: 4, fontSize: 10, color: colors.greenAccent[400], fontStyle: 'italic' }}>
-
+              Margin: {(hover.startMargin * 100).toFixed(1)}% → {(hover.endMargin * 100).toFixed(1)}%
             </div>
           </div>
         )}
       </div>
       
-      {/* Organization Popup - renders when selectedOrg is set */}
       {selectedOrg && (
         <OrganizationPopup
           organizationData={selectedOrg}
