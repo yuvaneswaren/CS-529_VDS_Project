@@ -45,9 +45,10 @@ const Dashboard = () => {
     }
   };
 
-  // Called when hovering over a line (clears the EIN highlight)
+  // Called when clicking on chart area (clears the EIN highlight and search)
   const handleClearHighlight = () => {
     setHighlightedEIN(null);
+    setSearchEIN("");
   };
 
   // Called when an EIN's mission is detected in the momentum chart
@@ -68,59 +69,7 @@ const Dashboard = () => {
 
   return (
     <Box m="10px">
-      {/* Search Bar */}
-      <Box mb="10px">
-        <form onSubmit={handleSearchSubmit}>
-          <TextField
-            value={searchEIN}
-            onChange={handleSearchChange}
-            placeholder="Search by EIN (e.g., 362167660)"
-            size="small"
-            sx={{
-              width: "400px",
-              "& .MuiOutlinedInput-root": {
-                backgroundColor: colors.primary[400],
-                "& fieldset": {
-                  borderColor: colors.grey[600],
-                },
-                "&:hover fieldset": {
-                  borderColor: colors.grey[500],
-                },
-                "&.Mui-focused fieldset": {
-                  borderColor: colors.greenAccent[500],
-                },
-              },
-              "& .MuiInputBase-input": {
-                color: colors.grey[100],
-              },
-              "& .MuiInputBase-input::placeholder": {
-                color: colors.grey[400],
-                opacity: 1,
-              },
-            }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ color: colors.grey[400] }} />
-                </InputAdornment>
-              ),
-              endAdornment: searchEIN && (
-                <InputAdornment position="end">
-                  <IconButton
-                    size="small"
-                    onClick={handleClearSearch}
-                    sx={{ color: colors.grey[400] }}
-                  >
-                    <ClearIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ),
-            }}
-          />
-        </form>
-      </Box>
-
-      <Box display="flex" gap="20px" height="calc(100vh - 160px)">
+      <Box display="flex" gap="20px" height="calc(100vh - 100px)">
         {/* LEFT SIDE (60%) */}
         <Box
           flex="2.5"
@@ -138,14 +87,22 @@ const Dashboard = () => {
             flexDirection="column"
             minHeight={0}
           >
-            <Typography
-              variant="h5"
-              fontWeight="600"
-              color={colors.grey[100]}
-              mb={0}
-            >
-              NTEE Category Distribution
-            </Typography>
+            <Box display="flex" alignItems="baseline" gap={1.5}>
+              <Typography
+                variant="h5"
+                fontWeight="600"
+                color={colors.grey[100]}
+              >
+                NTEE Category Distribution
+              </Typography>
+              <Typography
+                variant="body2"
+                color={colors.grey[300]}
+                sx={{ fontSize: "12px" }}
+              >
+                Each box area is directly proportional to the number of organizations in that mission category.
+              </Typography>
+            </Box>
 
             <Box flex="1" mt="4px" minHeight={0}>
               <Box height="100%">
@@ -217,22 +174,104 @@ const Dashboard = () => {
           flexDirection="column"
           minHeight={0}
         >
-          {/* Header row with title and legend */}
+          {/* Header */}
+          <Typography
+            color={colors.grey[100]}
+            variant="h5"
+            fontWeight="600"
+            mb={0.5}
+          >
+            Revenue vs Margin Momentum - Mission {selectedMission} cohort
+          </Typography>
+
+          {/* Description and Search Row */}
           <Box 
             display="flex" 
             justifyContent="space-between" 
+            alignItems="flex-start"
+            mb={0.5}
+          >
+            {/* Left side - Descriptions */}
+            <Box flex="1">
+              <Typography
+                color={colors.grey[300]}
+                variant="body2"
+                mb={0.3}
+              >
+                Margin = surplus ÷ revenue.
+              </Typography>
+
+              <Typography
+                color={colors.grey[300]}
+                variant="body2"
+              >
+                Log revenue is a size measure that compresses small and very large
+                organizations onto one axis.
+              </Typography>
+            </Box>
+
+            {/* Right side - Search Bar */}
+            <Box ml={2}>
+              <form onSubmit={handleSearchSubmit}>
+                <TextField
+                  value={searchEIN}
+                  onChange={handleSearchChange}
+                  placeholder="Search by EIN"
+                  size="small"
+                  sx={{
+                    width: "200px",
+                    "& .MuiOutlinedInput-root": {
+                      backgroundColor: colors.primary[500],
+                      "& fieldset": {
+                        borderColor: colors.grey[600],
+                      },
+                      "&:hover fieldset": {
+                        borderColor: colors.grey[500],
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: colors.greenAccent[500],
+                      },
+                    },
+                    "& .MuiInputBase-input": {
+                      color: colors.grey[100],
+                      padding: "5px 8px",
+                      fontSize: "12px",
+                    },
+                    "& .MuiInputBase-input::placeholder": {
+                      color: colors.grey[400],
+                      opacity: 1,
+                    },
+                  }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ color: colors.grey[400], fontSize: "16px" }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: searchEIN && (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          onClick={handleClearSearch}
+                          sx={{ color: colors.grey[400], padding: "2px" }}
+                        >
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </form>
+            </Box>
+          </Box>
+
+          {/* Legend row - aligned with search bar on right */}
+          <Box 
+            display="flex" 
+            justifyContent="flex-end"
             alignItems="center"
             mb={0.5}
           >
-            <Typography
-              color={colors.grey[100]}
-              variant="h5"
-              fontWeight="600"
-            >
-              Revenue vs Margin Momentum - Mission {selectedMission} cohort
-            </Typography>
-            
-            {/* Legend - inline with header */}
             <Box display="flex" alignItems="center" gap={2}>
               <Box display="flex" alignItems="center" gap={0.5}>
                 <Box
@@ -244,7 +283,7 @@ const Dashboard = () => {
                     border: '1px solid #111827'
                   }}
                 />
-                <Typography variant="caption" color={colors.grey[300]} fontSize={10}>
+                <Typography variant="caption" color={colors.grey[300]} fontSize={11}>
                   Dot: 2019 (Click dot for details)
                 </Typography>
               </Box>
@@ -258,29 +297,12 @@ const Dashboard = () => {
                     borderBottom: `8px solid ${colors.redAccent[400]}`
                   }}
                 />
-                <Typography variant="caption" color={colors.grey[300]} fontSize={10}>
+                <Typography variant="caption" color={colors.grey[300]} fontSize={11}>
                   Arrowhead: 2023
                 </Typography>
               </Box>
             </Box>
           </Box>
-
-          <Typography
-            color={colors.grey[300]}
-            variant="body2"
-            mb={0.3}
-          >
-            Margin = surplus ÷ revenue.
-          </Typography>
-
-          <Typography
-            color={colors.grey[300]}
-            variant="body2"
-            mb={1}
-          >
-            Log revenue is a size measure that compresses small and very large
-            organizations onto one axis.
-          </Typography>
 
           <Box flex="1" mt="4px" minHeight={0}>
             <MissionMomentumChart 
