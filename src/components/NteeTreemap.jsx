@@ -9,7 +9,6 @@ import { scaleLinear } from "d3-scale";
 import { interpolateBlues } from "d3-scale-chromatic";
 import { format } from "d3-format";
 
-// Map NTEE letter -> description
 const NTEE_DESCRIPTIONS = {
   A: "Arts, Culture and Humanities",
   B: "Educational Institutions and Related Activities",
@@ -39,14 +38,10 @@ const NTEE_DESCRIPTIONS = {
   Z: "Unknown",
 };
 
-// 🔹 Helper: build short label like "B (Edu)"
 const getShortLabel = (letter) => {
   const full = NTEE_DESCRIPTIONS[letter] || "Unknown";
-  // take first word, split on space/dash/en dash
   const firstWord = full.split(/[\s–-]+/)[0] || full;
-  // shorten long words to 3 letters
-  const short =
-    firstWord.length <= 8 ? firstWord : firstWord.slice(0, 3);
+  const short = firstWord.length <= 8 ? firstWord : firstWord.slice(0, 3);
   return `${letter} (${short})`;
 };
 
@@ -54,6 +49,7 @@ const NteeTreemap = ({
   csvUrl = "/il_nonprofits_orgs.csv",
   selectedMission,
   onMissionSelect,
+  highlightedEIN = null
 }) => {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
@@ -61,6 +57,7 @@ const NteeTreemap = ({
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState(null);
   const [treeData, setTreeData] = useState(null);
+  const [rawRows, setRawRows] = useState([]);
 
   useEffect(() => {
     setStatus("loading");
@@ -73,6 +70,7 @@ const NteeTreemap = ({
       complete: (results) => {
         try {
           const rows = results.data || [];
+          setRawRows(rows); // Store for EIN lookup
 
           const counts = {};
           rows.forEach((row) => {
@@ -87,8 +85,7 @@ const NteeTreemap = ({
             ([letter, count]) => ({
               name: letter,
               value: count,
-              description:
-                NTEE_DESCRIPTIONS[letter] || "Unknown / Other",
+              description: NTEE_DESCRIPTIONS[letter] || "Unknown / Other",
             })
           );
 
@@ -111,6 +108,25 @@ const NteeTreemap = ({
       },
     });
   }, [csvUrl]);
+
+  // Auto-select mission when highlightedEIN changes
+  useEffect(() => {
+    if (highlightedEIN && rawRows.length > 0) {
+      const org = rawRows.find(
+        row => String(row.ein || row.EIN) === String(highlightedEIN)
+      );
+      
+      if (org) {
+        const missionLetter = (org.ntee_letter || org.NTEE_LETTER || "").trim().toUpperCase();
+        console.log("Treemap found EIN:", highlightedEIN, "Mission:", missionLetter);
+        if (missionLetter && onMissionSelect) {
+          onMissionSelect(missionLetter);
+        }
+      } else {
+        console.log("Treemap: EIN not found in rawRows:", highlightedEIN);
+      }
+    }
+  }, [highlightedEIN, rawRows, onMissionSelect]);
 
   if (status === "loading") {
     return (
@@ -185,7 +201,6 @@ const NteeTreemap = ({
         }}
         colors={{ scheme: "green_blue" }}
         nodeOpacity={1}
-        // highlight selected mission with thicker border
         borderWidth={(node) =>
           selectedMission && node.data.name === selectedMission ? 3 : 1
         }

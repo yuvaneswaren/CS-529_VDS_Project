@@ -1,5 +1,8 @@
+// src/scenes/dashboard/index.jsx
 import { useState } from "react";
-import { Box, Typography, useTheme } from "@mui/material";
+import { Box, Typography, TextField, InputAdornment, IconButton, useTheme } from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
+import ClearIcon from "@mui/icons-material/Clear";
 import { tokens } from "../../theme";
 import NteeTreemap from "../../components/NteeTreemap";
 import RevenueHeatmap from "../../components/RevenueHeatmap";
@@ -10,12 +13,114 @@ const Dashboard = () => {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
 
-  // Selected NTEE mission letter, for example "E" for Health
+  // Selected NTEE mission letter
   const [selectedMission, setSelectedMission] = useState("E");
+  
+  // EIN search state
+  const [searchEIN, setSearchEIN] = useState("");
+  const [highlightedEIN, setHighlightedEIN] = useState(null);
+
+  // Handle search form submission
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    const ein = searchEIN.trim();
+    if (ein) {
+      setHighlightedEIN(ein);
+    }
+  };
+
+  // Handle clear button
+  const handleClearSearch = () => {
+    setSearchEIN("");
+    setHighlightedEIN(null);
+  };
+
+  // Handle text input change
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchEIN(value);
+    // Clear highlight if user deletes all text
+    if (!value.trim()) {
+      setHighlightedEIN(null);
+    }
+  };
+
+  // Called when hovering over a line (clears the EIN highlight)
+  const handleClearHighlight = () => {
+    setHighlightedEIN(null);
+  };
+
+  // Called when an EIN's mission is detected in the momentum chart
+  const handleEINMissionDetected = (mission) => {
+    setSelectedMission(mission);
+  };
+
+  // Called when user manually clicks a treemap category (should clear search)
+  const handleMissionSelect = (mission) => {
+    // Only clear highlight if this is a manual selection (not from EIN search)
+    // Check if the mission is different from current
+    if (mission !== selectedMission && highlightedEIN) {
+      setHighlightedEIN(null);
+      setSearchEIN("");
+    }
+    setSelectedMission(mission);
+  };
 
   return (
     <Box m="10px">
-      <Box display="flex" gap="20px" height="calc(100vh - 110px)">
+      {/* Search Bar */}
+      <Box mb="10px">
+        <form onSubmit={handleSearchSubmit}>
+          <TextField
+            value={searchEIN}
+            onChange={handleSearchChange}
+            placeholder="Search by EIN (e.g., 362167660)"
+            size="small"
+            sx={{
+              width: "400px",
+              "& .MuiOutlinedInput-root": {
+                backgroundColor: colors.primary[400],
+                "& fieldset": {
+                  borderColor: colors.grey[600],
+                },
+                "&:hover fieldset": {
+                  borderColor: colors.grey[500],
+                },
+                "&.Mui-focused fieldset": {
+                  borderColor: colors.greenAccent[500],
+                },
+              },
+              "& .MuiInputBase-input": {
+                color: colors.grey[100],
+              },
+              "& .MuiInputBase-input::placeholder": {
+                color: colors.grey[400],
+                opacity: 1,
+              },
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: colors.grey[400] }} />
+                </InputAdornment>
+              ),
+              endAdornment: searchEIN && (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={handleClearSearch}
+                    sx={{ color: colors.grey[400] }}
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
+          />
+        </form>
+      </Box>
+
+      <Box display="flex" gap="20px" height="calc(100vh - 160px)">
         {/* LEFT SIDE (60%) */}
         <Box
           flex="2.5"
@@ -46,7 +151,8 @@ const Dashboard = () => {
               <Box height="100%">
                 <NteeTreemap
                   selectedMission={selectedMission}
-                  onMissionSelect={setSelectedMission}
+                  onMissionSelect={handleMissionSelect}
+                  highlightedEIN={highlightedEIN}
                 />
               </Box>
             </Box>
@@ -177,7 +283,12 @@ const Dashboard = () => {
           </Typography>
 
           <Box flex="1" mt="4px" minHeight={0}>
-            <MissionMomentumChart selectedMission={selectedMission} />
+            <MissionMomentumChart 
+              selectedMission={selectedMission}
+              highlightedEIN={highlightedEIN}
+              onClearHighlight={handleClearHighlight}
+              onEINMissionDetected={handleEINMissionDetected}
+            />
           </Box>
         </Box>
       </Box>
