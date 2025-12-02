@@ -989,7 +989,7 @@ const MissionMomentumChart = ({
               justifyContent: "center",
             }}
           >
-            Reset Zoom
+            <strong style={{ color: colors[400] }}>Reset Zoom</strong>
           </button>
         )}
 
