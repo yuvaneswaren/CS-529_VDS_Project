@@ -91,7 +91,8 @@ const Dashboard = () => {
             flexDirection="column"
             minHeight={0}
           >
-            <Box display="flex" alignItems="baseline" gap={1.5}>
+            {/* Header with title and interactive hint */}
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
               <Typography
                 variant="h5"
                 fontWeight="600"
@@ -100,15 +101,27 @@ const Dashboard = () => {
                 NTEE Category Distribution
               </Typography>
               <Typography
-                variant="body2"
-                color={colors.grey[300]}
-                sx={{ fontSize: "12px" }}
+                variant="caption"
+                sx={{ 
+                  color: colors[400],
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  fontStyle: "bold"
+                }}
               >
-                Each box area is directly proportional to the number of organizations in that mission category.
               </Typography>
             </Box>
+            
+            {/* Description */}
+            <Typography
+              variant="body2"
+              color={colors.grey[300]}
+              sx={{ fontSize: "12px", mb: 0.5 }}
+            >
+              Each box area is proportional to the number of organizations in that mission category.
+            </Typography>
 
-            <Box flex="1" mt="4px" minHeight={0}>
+            <Box flex="1" minHeight={0}>
               <Box height="100%">
                 <NteeTreemap
                   selectedMission={selectedMission}
