@@ -821,7 +821,7 @@ const OrganizationPopup = ({ organizationData, onClose }) => {
               </Typography>
             </Box>
             <Typography sx={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', mb: 2 }}>
-              Height = asset productivity, thickness = net assets, color = debt ratio
+              Height = asset productivity, color = debt ratio (Total Liabilities ÷ Total Assets)
             </Typography>
             <Box sx={{ display: 'flex', justifyContent: 'center' }}>
               <svg
