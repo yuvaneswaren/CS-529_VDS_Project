@@ -7,7 +7,6 @@ import Papa from "papaparse";
 
 import { scaleLinear } from "d3-scale";
 import { interpolateBlues } from "d3-scale-chromatic";
-import { format } from "d3-format";
 
 const NTEE_DESCRIPTIONS = {
   A: "Arts, Culture and Humanities",
@@ -176,8 +175,6 @@ const NteeTreemap = ({
           .range([interpolateBlues(0.6), interpolateBlues(0.95)])
       : () => colors.primary[500];
 
-  const formatCount = format(",d");
-
   return (
     <div style={{ width: "100%", height: "100%" }}>
       <ResponsiveTreeMap
@@ -225,39 +222,36 @@ const NteeTreemap = ({
             node.data.description ||
             NTEE_DESCRIPTIONS[letter] ||
             "Total";
-
-          const nodeX = node.x || 0;
-          const nodeWidth = node.width || 0;
-          const centerX = nodeX + nodeWidth / 2;
-
-          const rootWidth =
-            (node.parent && node.parent.width) || nodeWidth || 0;
-
-          const isLeftHalf =
-            rootWidth > 0 ? centerX < rootWidth / 2 : true;
-
-          const horizontalTransform = isLeftHalf
-            ? "translate(70%, 100px)"
-            : "translate(100px, 70%)";
+          
+          // Get first word of description for short label
+          const firstWord = desc.split(/[\s–-]+/)[0] || desc;
 
           return (
             <div
               style={{
-                padding: "6px 9px",
-                background: colors.primary[500],
-                border: `1px solid ${colors.grey[300]}`,
+                padding: "8px 12px",
+                background: colors.primary[600],
                 color: colors.grey[100],
-                borderRadius: 4,
-                maxWidth: 220,
-                whiteSpace: "normal",
-                transform: horizontalTransform,
+                borderRadius: 8,
+                fontSize: 12,
+                fontFamily:
+                  "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+                boxShadow: "0 8px 18px rgba(0,0,0,0.45)",
                 pointerEvents: "none",
-                boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                maxWidth: 260,
+                lineHeight: 1.4,
               }}
             >
-              <strong>{desc}</strong>
-              <br />
-              ({letter}) – Organizations: {formatCount(node.value || 0)}
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                {letter} ({firstWord})
+              </div>
+              <div>Organizations</div>
+              <div>
+                Count:{" "}
+                {(node.value || 0).toLocaleString(undefined, {
+                  maximumFractionDigits: 0,
+                })}
+              </div>
             </div>
           );
         }}

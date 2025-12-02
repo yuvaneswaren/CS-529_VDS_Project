@@ -142,6 +142,7 @@ const MissionMomentumChart = ({
   const [lastYear, setLastYear] = useState(null);
 
   const [hover, setHover] = useState(null);
+  const [pinnedTooltip, setPinnedTooltip] = useState(null);
   const [selectedOrg, setSelectedOrg] = useState(null);
 
   const containerRef = useRef(null);
@@ -190,16 +191,29 @@ const MissionMomentumChart = ({
     setSelectedOrg(null);
   }, []);
 
+  // Store the organization's position for tooltip placement
+  const highlightedOrgPositionRef = useRef(null);
+
   // When highlightedEIN changes, find and select the mission
   useEffect(() => {
-    if (highlightedEIN && trajectories.length > 0 && onEINMissionDetected) {
+    if (highlightedEIN && trajectories.length > 0) {
       const org = trajectories.find(t => String(t.orgId) === String(highlightedEIN));
-      if (org && org.ntee_letter) {
+      if (org) {
         console.log("Found EIN organization:", org.orgName, "Mission:", org.ntee_letter);
-        onEINMissionDetected(org.ntee_letter);
+        if (org.ntee_letter && onEINMissionDetected) {
+          onEINMissionDetected(org.ntee_letter);
+        }
+        
+        // Store org info for use in the draw effect
+        highlightedOrgPositionRef.current = org;
       } else {
         console.log("EIN not found in trajectories:", highlightedEIN);
+        highlightedOrgPositionRef.current = null;
       }
+    } else {
+      // Clear pinned tooltip when highlight is removed
+      setPinnedTooltip(null);
+      highlightedOrgPositionRef.current = null;
     }
   }, [highlightedEIN, trajectories, onEINMissionDetected]);
 
@@ -208,8 +222,6 @@ const MissionMomentumChart = ({
     if (status !== "ready") return;
     const host = containerRef.current;
     if (!host) return;
-
-    setHover(null);
 
     const svgWidth = host.clientWidth || 800;
     const svgHeight = host.clientHeight || 360;
@@ -468,12 +480,22 @@ const MissionMomentumChart = ({
       .attr("opacity", d => getInitialOpacity(d, 'dot'))
       .style("cursor", "pointer");
 
-    // Arc event handlers - NO clearing of highlight on hover
+    // Arc event handlers - allow hover on other items while keeping searched EIN highlighted
     arcs
       .on("mouseenter", (event, d) => {
-        arcs.attr("opacity", (other) => other.orgId === d.orgId ? 0.95 : 0.15);
-        dots.attr("opacity", (other) => other.orgId === d.orgId ? 1 : 0.15);
+        // Always allow hover highlights
+        arcs.attr("opacity", (other) => {
+          if (String(other.orgId) === String(d.orgId)) return 0.95;
+          if (highlightedEIN && String(other.orgId) === String(highlightedEIN)) return 0.95;
+          return 0.15;
+        });
+        dots.attr("opacity", (other) => {
+          if (String(other.orgId) === String(d.orgId)) return 1;
+          if (highlightedEIN && String(other.orgId) === String(highlightedEIN)) return 1;
+          return 0.15;
+        });
         
+        // Show hover tooltip for current item
         const first = d.points[0];
         const last = d.points[d.points.length - 1];
         setHover({
@@ -487,6 +509,7 @@ const MissionMomentumChart = ({
         });
       })
       .on("mousemove", (event, d) => {
+        // Update hover tooltip position
         const first = d.points[0];
         const last = d.points[d.points.length - 1];
         setHover({
@@ -500,8 +523,10 @@ const MissionMomentumChart = ({
         });
       })
       .on("mouseleave", () => {
+        // Clear hover tooltip
         setHover(null);
-        // Restore to EIN highlight state if active, otherwise normal
+        
+        // Restore opacity based on whether EIN is highlighted
         if (highlightedEIN) {
           arcs.attr("opacity", (d) => String(d.orgId) === String(highlightedEIN) ? 0.95 : 0.15);
           dots.attr("opacity", (d) => String(d.orgId) === String(highlightedEIN) ? 1 : 0.15);
@@ -511,13 +536,23 @@ const MissionMomentumChart = ({
         }
       });
 
-    // Dot event handlers - NO clearing of highlight on hover
+    // Dot event handlers - allow hover on other items while keeping searched EIN highlighted
     dots
       .on("mouseenter", (event, d) => {
-        arcs.attr("opacity", (other) => other.orgId === d.orgId ? 0.95 : 0.15);
-        dots.attr("opacity", (other) => other.orgId === d.orgId ? 1 : 0.15);
+        // Always allow hover highlights
+        arcs.attr("opacity", (other) => {
+          if (String(other.orgId) === String(d.orgId)) return 0.95;
+          if (highlightedEIN && String(other.orgId) === String(highlightedEIN)) return 0.95;
+          return 0.15;
+        });
+        dots.attr("opacity", (other) => {
+          if (String(other.orgId) === String(d.orgId)) return 1;
+          if (highlightedEIN && String(other.orgId) === String(highlightedEIN)) return 1;
+          return 0.15;
+        });
         d3.select(event.currentTarget).attr("r", 5);
         
+        // Show hover tooltip for current item
         const first = d.points[0];
         const last = d.points[d.points.length - 1];
         setHover({
@@ -531,6 +566,7 @@ const MissionMomentumChart = ({
         });
       })
       .on("mousemove", (event, d) => {
+        // Update hover tooltip position
         const first = d.points[0];
         const last = d.points[d.points.length - 1];
         setHover({
@@ -544,9 +580,11 @@ const MissionMomentumChart = ({
         });
       })
       .on("mouseleave", (event) => {
+        // Clear hover tooltip
         setHover(null);
         d3.select(event.currentTarget).attr("r", 3);
-        // Restore to EIN highlight state if active, otherwise normal
+        
+        // Restore opacity based on whether EIN is highlighted
         if (highlightedEIN) {
           arcs.attr("opacity", (d) => String(d.orgId) === String(highlightedEIN) ? 0.95 : 0.15);
           dots.attr("opacity", (d) => String(d.orgId) === String(highlightedEIN) ? 1 : 0.15);
@@ -578,6 +616,39 @@ const MissionMomentumChart = ({
         onClearHighlight();
       }
     });
+
+    // Set tooltip position for highlighted EIN after scales are defined
+    if (highlightedEIN && highlightedOrgPositionRef.current) {
+      const org = highlightedOrgPositionRef.current;
+      const first = org.points[0];
+      const last = org.points[org.points.length - 1];
+      
+      // Get the SVG element's position on the page
+      const svgRect = host.getBoundingClientRect();
+      
+      // Calculate the position of the end point (arrowhead) in SVG coordinates
+      const endX = x(last.log_revenue);
+      const endY = y(last.margin_pct);
+      
+      // Convert to page coordinates
+      const pageX = svgRect.left + endX;
+      const pageY = svgRect.top + endY;
+      
+      // Position tooltip to the right of the arrowhead
+      // Add offset to avoid covering the point
+      const tooltipX = pageX + 15;
+      const tooltipY = pageY - 30;
+      
+      setPinnedTooltip({
+        x: tooltipX,
+        y: tooltipY,
+        org: org.orgName || org.orgId,
+        startRev: first.log_revenue,
+        endRev: last.log_revenue,
+        startMargin: first.margin_pct,
+        endMargin: last.margin_pct,
+      });
+    }
       
   }, [status, trajectories, missionLetter, colors, highlightedEIN, onClearHighlight]);
 
@@ -618,6 +689,38 @@ const MissionMomentumChart = ({
           position: "relative",
         }}
       >
+        {/* Pinned tooltip for searched EIN */}
+        {pinnedTooltip && (
+          <div
+            style={{
+              position: "fixed",
+              left: pinnedTooltip.x + 12,
+              top: pinnedTooltip.y + 12,
+              zIndex: 11,
+              background: colors.primary[500],
+              color: colors.grey[100],
+              border: `1px solid ${colors.grey[400]}`,
+              borderRadius: 4,
+              padding: "6px 10px",
+              fontSize: 11,
+              boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+              pointerEvents: "none",
+              maxWidth: 260,
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>
+              {pinnedTooltip.org}
+            </div>
+            <div>
+              Log revenue: {pinnedTooltip.startRev.toFixed(2)} → {pinnedTooltip.endRev.toFixed(2)}
+            </div>
+            <div>
+              Margin: {(pinnedTooltip.startMargin * 100).toFixed(1)}% → {(pinnedTooltip.endMargin * 100).toFixed(1)}%
+            </div>
+          </div>
+        )}
+        
+        {/* Hover tooltip for other items */}
         {hover && (
           <div
             style={{
