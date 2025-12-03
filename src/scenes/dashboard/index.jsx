@@ -478,7 +478,8 @@ const Dashboard = () => {
   const colors = tokens(theme.palette.mode);
 
   // Mission used by MissionMomentumChart and for non-"ALL" left selections
-  const [selectedMission, setSelectedMission] = useState("ALL");
+  // const [selectedMission, setSelectedMission] = useState("ALL");
+  const [selectedMission, setSelectedMission] = useState("E");
 
   // Left-side "ALL missions" mode flag (treemap + heatmap + bar chart)
   const [leftAllMode, setLeftAllMode] = useState(true); // root selected initially
