@@ -1,8 +1,9 @@
-// src/components/StackedSectorBar.jsx
+// src/components/SectorStackedBarChart.jsx
 import React, {
   useEffect,
   useState,
   useRef,
+  useLayoutEffect,
   useMemo,
 } from "react";
 import Papa from "papaparse";
@@ -16,17 +17,16 @@ import {
 } from "@mui/material";
 import { tokens } from "../theme";
 
-// d3 imports
 import { scaleBand, scaleLinear } from "d3-scale";
 import { max } from "d3-array";
 
-// ---------------- NTEE Descriptions + short label helper ----------------
+// NTEE descriptions for nicer labels in dropdown / tooltip
 const NTEE_DESCRIPTIONS = {
   A: "Arts, Culture and Humanities",
   B: "Educational Institutions and Related Activities",
   C: "Environmental Quality, Protection and Beautification",
   D: "Animal-Related",
-  E: "Health – General and Rehabilitative",
+  E: "Health, General and Rehabilitative",
   F: "Mental Health, Crisis Intervention",
   G: "Diseases, Disorders, Medical Disciplines",
   H: "Medical Research",
@@ -51,16 +51,14 @@ const NTEE_DESCRIPTIONS = {
 };
 
 const getShortLabel = (letter) => {
+  if (letter === "ALL") return "All missions";
   const full = NTEE_DESCRIPTIONS[letter] || "Unknown";
-
   const firstWord = full
-    .split(/[\s–-]+/)[0]     // take only first word
-    .replace(/[,.:-]+$/, ""); // remove trailing punctuation
-
+    .split(/[\s–-]+/)[0]
+    .replace(/[,.:-]+$/, "");
   return `${letter} (${firstWord})`;
 };
 
-// ---------------- Number parsing + formatting ----------------
 const parseNumber = (val) => {
   if (val == null || val === "") return 0;
   if (typeof val === "number") return val;
@@ -70,27 +68,42 @@ const parseNumber = (val) => {
 };
 
 const formatMoney = (num) => {
-  if (num >= 1e12) return (num / 1e12).toFixed(1) + "T"; // trillions
-  if (num >= 1e9) return (num / 1e9).toFixed(1) + "B";   // billions
-  if (num >= 1e6) return (num / 1e6).toFixed(1) + "M";   // millions
-  if (num >= 1e3) return (num / 1e3).toFixed(1) + "K";   // thousands
+  if (num >= 1e12) return (num / 1e12).toFixed(1) + "T";
+  if (num >= 1e9) return (num / 1e9).toFixed(1) + "B";
+  if (num >= 1e6) return (num / 1e6).toFixed(1) + "M";
+  if (num >= 1e3) return (num / 1e3).toFixed(1) + "K";
   return num.toFixed(0);
 };
 
-const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
+const SectorStackedBarChart = ({
+  csvUrl = "/il_nonprofits_orgs.csv",
+  selectedMission = "ALL", // "ALL" means aggregate over all missions
+  onMissionChange,
+}) => {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
 
   const containerRef = useRef(null);
-
-  // 🔹 fixed virtual drawing size; viewBox will scale this to the card size
-  const size = { width: 550, height: 400 };
-
+  const [size, setSize] = useState({ width: 550, height: 600 });
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState(null);
   const [sectorTotals, setSectorTotals] = useState(null);
-  const [selectedSector, setSelectedSector] = useState("");
   const [hoverInfo, setHoverInfo] = useState(null);
+
+  // measure chart container (responsive)
+  useLayoutEffect(() => {
+    if (!containerRef.current) return;
+
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[0].contentRect;
+      const width = Math.max(rect.width, 300);
+      const height = Math.max(rect.height, 250);
+      setSize({ width, height });
+    });
+
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   // load + aggregate data by NTEE sector (letter)
   useEffect(() => {
@@ -136,10 +149,6 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
           const sectors = Object.keys(totals).sort();
 
           setSectorTotals({ sectors, totals });
-          if (sectors.length > 0) {
-            setSelectedSector((prev) => prev || sectors[0]);
-          }
-
           setStatus("ready");
         } catch (err) {
           console.error(err);
@@ -159,29 +168,46 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
   const margin = { top: 20, right: 20, bottom: 45, left: 100 };
 
   const chart = useMemo(() => {
-    if (
-      !sectorTotals ||
-      !sectorTotals.sectors.length ||
-      !selectedSector ||
-      !sectorTotals.totals[selectedSector]
-    ) {
+    if (!sectorTotals || !sectorTotals.sectors.length) {
       return null;
     }
 
     const metrics = ["Assets", "Income", "Revenue"];
     const metricKeys = ["assets", "income", "revenue"];
-    const { totals } = sectorTotals;
+    const { totals, sectors } = sectorTotals;
 
-    const values = metricKeys.map(
-      (key) => totals[selectedSector][key] || 0
-    );
+    let displayMode = "ONE"; // "ONE" sector or "ALL"
+    let displaySector = null;
+    let values = [];
+
+    if (!selectedMission || selectedMission === "ALL") {
+      displayMode = "ALL";
+      values = metricKeys.map((key) =>
+        sectors.reduce(
+          (sum, s) => sum + (totals[s]?.[key] || 0),
+          0
+        )
+      );
+    } else {
+      displayMode = "ONE";
+      const sectorKey = totals[selectedMission]
+        ? selectedMission
+        : sectors[0];
+      displaySector = sectorKey;
+      values = metricKeys.map(
+        (key) => totals[sectorKey]?.[key] || 0
+      );
+    }
 
     const maxValue = max(values) || 0;
     if (maxValue <= 0) {
       return { empty: true };
     }
 
-    const innerWidth = Math.max(size.width - margin.left - margin.right, 10);
+    const innerWidth = Math.max(
+      size.width - margin.left - margin.right,
+      10
+    );
     const innerHeight = Math.max(
       size.height - margin.top - margin.bottom,
       10
@@ -208,84 +234,27 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
       values,
       yTicks,
       maxValue,
+      displayMode,
+      displaySector,
     };
-  }, [sectorTotals, selectedSector, size.width, size.height, margin]);
+  }, [
+    sectorTotals,
+    selectedMission,
+    size,
+    margin.left,
+    margin.right,
+    margin.top,
+    margin.bottom,
+  ]);
 
-  // Smart tooltip positioning based on bar location
-  const getTooltipPosition = (barX, barY, barWidth, barHeight) => {
-    if (!containerRef.current) return { x: 0, y: 0 };
-    
-    const containerBounds = containerRef.current.getBoundingClientRect();
-    const svgBounds = containerRef.current.querySelector('svg')?.getBoundingClientRect();
-    
-    if (!svgBounds) return { x: 0, y: 0 };
-    
-    // Calculate scale factor between viewBox and actual rendered size
-    const scaleX = svgBounds.width / size.width;
-    const scaleY = svgBounds.height / size.height;
-    
-    // Convert SVG coordinates to container coordinates
-    const barCenterX = (barX + barWidth / 2) * scaleX;
-    const barTopY = barY * scaleY;
-    const barBottomY = (barY + barHeight) * scaleY;
-    
-    const tooltipWidth = 200; // approximate width
-    const tooltipHeight = 90; // approximate height
-    const padding = 10;
-    
-    let adjustedY;
-    
-    // Try positioning above the bar first
-    const positionAbove = barTopY - tooltipHeight - padding;
-    
-    // Try positioning below the bar
-    const positionBelow = barBottomY + padding;
-    
-    // Check which position fits better
-    if (positionAbove >= padding) {
-      // Enough space above, use it
-      adjustedY = positionAbove;
-    } else if (positionBelow + tooltipHeight <= containerBounds.height - padding) {
-      // Not enough space above, but enough below
-      adjustedY = positionBelow;
-    } else {
-      // Neither fits perfectly, choose the best option
-      // If bar is in top half, position at bottom of container
-      // If bar is in bottom half, position at top of container
-      const barMiddleY = (barTopY + barBottomY) / 2;
-      if (barMiddleY < containerBounds.height / 2) {
-        // Bar in top half, position tooltip at bottom
-        adjustedY = Math.max(padding, Math.min(positionBelow, containerBounds.height - tooltipHeight - padding));
-      } else {
-        // Bar in bottom half, position tooltip at top
-        adjustedY = padding;
-      }
-    }
-    
-    // Ensure tooltip doesn't go off bottom
-    if (adjustedY + tooltipHeight > containerBounds.height - padding) {
-      adjustedY = containerBounds.height - tooltipHeight - padding;
-    }
-    
-    // Ensure tooltip doesn't go off top
-    if (adjustedY < padding) {
-      adjustedY = padding;
-    }
-    
-    // Center horizontally on the bar
-    let adjustedX = barCenterX - tooltipWidth / 2;
-    
-    // Check if tooltip goes off right edge
-    if (adjustedX + tooltipWidth > containerBounds.width - padding) {
-      adjustedX = containerBounds.width - tooltipWidth - padding;
-    }
-    
-    // Check if tooltip goes off left edge
-    if (adjustedX < padding) {
-      adjustedX = padding;
-    }
-    
-    return { x: adjustedX, y: adjustedY };
+  const getRelativePosition = (e) => {
+    const container = containerRef.current;
+    if (!container) return { x: 0, y: 0 };
+    const bounds = container.getBoundingClientRect();
+    return {
+      x: e.clientX - bounds.left,
+      y: e.clientY - bounds.top,
+    };
   };
 
   if (status === "loading") {
@@ -307,12 +276,26 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
   if (!chart || chart.empty) {
     return (
       <Typography variant="body2" color={colors.grey[100]} sx={{ p: 1 }}>
-        No financial data available for selected sector.
+        No financial data available.
       </Typography>
     );
   }
 
-  const { xScale, yScale, metrics, metricKeys, values, yTicks } = chart;
+  const {
+    xScale,
+    yScale,
+    metrics,
+    metricKeys,
+    values,
+    yTicks,
+    displayMode,
+    displaySector,
+  } = chart;
+
+  const selectValue =
+    !selectedMission || selectedMission === "ALL"
+      ? "ALL"
+      : selectedMission;
 
   return (
     <Box
@@ -329,22 +312,15 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
           display: "flex",
           justifyContent: "flex-end",
           mb: 1,
-          mt: 1.5, // Added top margin to create space from title
         }}
       >
         <FormControl
           size="small"
           sx={{
-            minWidth: 160,
+            minWidth: 180,
             "& .MuiInputBase-root": {
               backgroundColor: colors.primary[500],
               color: colors.grey[100],
-              height: 32, // Reduced height
-            },
-            "& .MuiSelect-select": {
-              paddingTop: "4px",
-              paddingBottom: "4px",
-              fontSize: "13px",
             },
             "& .MuiSvgIcon-root": {
               color: colors.grey[100],
@@ -352,10 +328,16 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
           }}
         >
           <Select
-            value={selectedSector || ""}
-            onChange={(e) => setSelectedSector(e.target.value)}
+            value={selectValue}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (onMissionChange) {
+                onMissionChange(val); // "ALL" or letter
+              }
+            }}
             displayEmpty
           >
+            <MenuItem value="ALL">All missions (aggregate)</MenuItem>
             {sectorTotals?.sectors.map((s) => (
               <MenuItem key={s} value={s}>
                 {getShortLabel(s)}
@@ -371,7 +353,6 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
         sx={{
           flex: 1,
           position: "relative",
-          overflow: "hidden", // clip just in case
         }}
       >
         <svg
@@ -396,13 +377,14 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
                     y2={y}
                     stroke={colors.grey[100]}
                     strokeWidth={0.5}
+                    opacity={0.4}
                   />
                   <text
-                    x={margin.left - 8}
+                    x={margin.left - 10}
                     y={y}
                     dy="0.32em"
                     textAnchor="end"
-                    fontSize={22}
+                    fontSize={14}
                     fill={colors.grey[100]}
                     fontWeight={t === 0 ? 600 : 400}
                   >
@@ -419,14 +401,15 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
               const x = xScale(m);
               if (x == null) return null;
               const cx = x + xScale.bandwidth() / 2;
-              const y = size.height - margin.bottom + 30;
+              const y =
+                size.height - margin.bottom + 20; // inside bottom
               return (
                 <text
                   key={m}
                   x={cx}
                   y={y}
                   textAnchor="middle"
-                  fontSize={22}
+                  fontSize={14}
                   fill={colors.grey[100]}
                 >
                   {m}
@@ -435,19 +418,27 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
             })}
           </g>
 
-          {/* y-axis title on left, clean positioning */}
-          <text
-            transform={`translate(${margin.left - 80}, ${
-              margin.top + (size.height - margin.top - margin.bottom) / 2
-            }) rotate(-90)`}
-            textAnchor="middle"
-            fontSize={18}
-            fill={colors.grey[100]}
-          >
-            Total Amount (USD)
-          </text>
+          {/* y-axis title */}
+          {(() => {
+            const innerHeight =
+              size.height - margin.top - margin.bottom;
+            const cx = margin.left - 65;
+            const cy = margin.top + innerHeight / 2;
+            return (
+              <text
+                x={cx}
+                y={cy}
+                textAnchor="middle"
+                transform={`rotate(-90 ${cx}, ${cy})`}
+                fontSize={13}
+                fill={colors.grey[100]}
+              >
+                Total Amount (USD)
+              </text>
+            );
+          })()}
 
-          {/* Bars: 3 metrics for selected sector */}
+          {/* Bars */}
           <g>
             {metrics.map((metricLabel, idx) => {
               const value = values[idx];
@@ -470,6 +461,9 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
                   ? colors.blueAccent[400]
                   : colors.redAccent[400];
 
+              const sectorForHover =
+                displayMode === "ALL" ? "ALL" : displaySector;
+
               return (
                 <rect
                   key={metricLabel}
@@ -482,15 +476,21 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
                   stroke={colors.primary[900]}
                   strokeWidth={0.6}
                   style={{ cursor: "pointer" }}
-                  onMouseEnter={() => {
-                    const adjustedPos = getTooltipPosition(x, y1, barWidth, h);
+                  onMouseEnter={(e) => {
+                    const pos = getRelativePosition(e);
                     setHoverInfo({
-                      x: adjustedPos.x,
-                      y: adjustedPos.y,
+                      x: pos.x,
+                      y: pos.y,
                       metricLabel,
-                      sector: selectedSector,
+                      sector: sectorForHover,
                       value,
                     });
+                  }}
+                  onMouseMove={(e) => {
+                    const pos = getRelativePosition(e);
+                    setHoverInfo((prev) =>
+                      prev ? { ...prev, x: pos.x, y: pos.y } : prev
+                    );
                   }}
                   onMouseLeave={() => setHoverInfo(null)}
                 />
@@ -504,8 +504,8 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
           <div
             style={{
               position: "absolute",
-              left: hoverInfo.x,
-              top: hoverInfo.y,
+              left: hoverInfo.x + 12,
+              top: hoverInfo.y + 12,
               background: colors.primary[600],
               color: colors.grey[100],
               padding: "8px 12px",
@@ -521,11 +521,13 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
             }}
           >
             <div style={{ fontWeight: 600, marginBottom: 4 }}>
-              {getShortLabel(hoverInfo.sector)}
+              {hoverInfo.sector === "ALL"
+                ? "All missions (aggregate)"
+                : getShortLabel(hoverInfo.sector)}
             </div>
             <div>{hoverInfo.metricLabel}</div>
             <div>
-              Amount:${" "}
+              Amount:{" "}
               {hoverInfo.value.toLocaleString(undefined, {
                 maximumFractionDigits: 0,
               })}
@@ -537,4 +539,4 @@ const StackedSectorBar = ({ csvUrl = "/il_nonprofits_orgs.csv" }) => {
   );
 };
 
-export default StackedSectorBar;
+export default SectorStackedBarChart;
