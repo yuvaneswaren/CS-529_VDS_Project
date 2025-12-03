@@ -11,7 +11,7 @@ const DEFAULT_CSV_URL = "/il_nonprofits_orgs.csv";
 
 // Performance color constants
 const IMPROVED_COLOR = "#4CAF50"; // Green for margin improvement
-const DECLINED_COLOR = "#EF5350"; // Red for margin decline
+const DECLINED_COLOR = "#d64b4a"; // Red for margin decline
 
 function buildOrganizationDataForPopup(orgId, orgName, ntee_letter, city, rows) {
   const orgRow = rows.find(row => (row.ein || row.EIN) === orgId);
