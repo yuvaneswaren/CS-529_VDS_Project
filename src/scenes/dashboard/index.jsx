@@ -9,6 +9,10 @@ import RevenueHeatmap from "../../components/RevenueHeatmap";
 import SectorStackedBarChart from "../../components/SectorStackedBarChart";
 import MissionMomentumChart from "../../components/MissionMomentumChart";
 
+// Performance color constants (matching MissionMomentumChart)
+const IMPROVED_COLOR = "#4CAF50";
+const DECLINED_COLOR = "#EF5350";
+
 const Dashboard = () => {
   const theme = useTheme();
   const colors = tokens(theme.palette.mode);
@@ -16,29 +20,29 @@ const Dashboard = () => {
   // Selected NTEE mission letter
   const [selectedMission, setSelectedMission] = useState("E");
   
-  // EIN search state
-  const [searchEIN, setSearchEIN] = useState("");
+  // Search state (supports EIN or name)
+  const [searchQuery, setSearchQuery] = useState("");
   const [highlightedEIN, setHighlightedEIN] = useState(null);
 
   // Handle search form submission
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    const ein = searchEIN.trim();
-    if (ein) {
-      setHighlightedEIN(ein);
+    const query = searchQuery.trim();
+    if (query) {
+      setHighlightedEIN(query);
     }
   };
 
   // Handle clear button
   const handleClearSearch = () => {
-    setSearchEIN("");
+    setSearchQuery("");
     setHighlightedEIN(null);
   };
 
   // Handle text input change
   const handleSearchChange = (e) => {
     const value = e.target.value;
-    setSearchEIN(value);
+    setSearchQuery(value);
     // Clear highlight if user deletes all text
     if (!value.trim()) {
       setHighlightedEIN(null);
@@ -48,7 +52,7 @@ const Dashboard = () => {
   // Called when clicking on chart area (clears the EIN highlight and search)
   const handleClearHighlight = () => {
     setHighlightedEIN(null);
-    setSearchEIN("");
+    setSearchQuery("");
   };
 
   // Called when an EIN's mission is detected in the momentum chart
@@ -62,7 +66,7 @@ const Dashboard = () => {
     // Check if the mission is different from current
     if (mission !== selectedMission && highlightedEIN) {
       setHighlightedEIN(null);
-      setSearchEIN("");
+      setSearchQuery("");
     }
     setSelectedMission(mission);
   };
@@ -87,7 +91,8 @@ const Dashboard = () => {
             flexDirection="column"
             minHeight={0}
           >
-            <Box display="flex" alignItems="baseline" gap={1.5}>
+            {/* Header with title and interactive hint */}
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
               <Typography
                 variant="h5"
                 fontWeight="600"
@@ -96,15 +101,27 @@ const Dashboard = () => {
                 NTEE Category Distribution
               </Typography>
               <Typography
-                variant="body2"
-                color={colors.grey[300]}
-                sx={{ fontSize: "12px" }}
+                variant="caption"
+                sx={{ 
+                  color: colors[400],
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  fontStyle: "bold"
+                }}
               >
-                Each box area is directly proportional to the number of organizations in that mission category.
               </Typography>
             </Box>
+            
+            {/* Description */}
+            <Typography
+              variant="body2"
+              color={colors.grey[300]}
+              sx={{ fontSize: "12px", mb: 0.5 }}
+            >
+              Each box area is proportional to the number of organizations in that mission category.
+            </Typography>
 
-            <Box flex="1" mt="4px" minHeight={0}>
+            <Box flex="1" minHeight={0}>
               <Box height="100%">
                 <NteeTreemap
                   selectedMission={selectedMission}
@@ -214,12 +231,12 @@ const Dashboard = () => {
             <Box ml={2}>
               <form onSubmit={handleSearchSubmit}>
                 <TextField
-                  value={searchEIN}
+                  value={searchQuery}
                   onChange={handleSearchChange}
-                  placeholder="Search by EIN"
+                  placeholder="Search by EIN or Name"
                   size="small"
                   sx={{
-                    width: "200px",
+                    width: "220px",
                     "& .MuiOutlinedInput-root": {
                       backgroundColor: colors.primary[500],
                       "& fieldset": {
@@ -248,7 +265,7 @@ const Dashboard = () => {
                         <SearchIcon sx={{ color: colors.grey[400], fontSize: "16px" }} />
                       </InputAdornment>
                     ),
-                    endAdornment: searchEIN && (
+                    endAdornment: searchQuery && (
                       <InputAdornment position="end">
                         <IconButton
                           size="small"
@@ -265,26 +282,84 @@ const Dashboard = () => {
             </Box>
           </Box>
 
-          {/* Legend row - aligned with search bar on right */}
+          {/* Improved Legend row - stronger colors and higher contrast */}
           <Box 
             display="flex" 
-            justifyContent="flex-end"
+            justifyContent="space-between"
             alignItems="center"
             mb={0.5}
+            sx={{
+              backgroundColor: "rgba(0,0,0,0.25)",
+              borderRadius: 1,
+              px: 1.5,
+              py: 0.6,
+            }}
           >
-            <Box display="flex" alignItems="center" gap={2}>
+            {/* Left side - Performance indicators */}
+            <Box display="flex" alignItems="center" gap={3}>
               <Box display="flex" alignItems="center" gap={0.5}>
                 <Box
                   sx={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    backgroundColor: colors.grey[200],
-                    border: '1px solid #111827'
+                    width: 24,
+                    height: 3,
+                    backgroundColor: IMPROVED_COLOR,
+                    borderRadius: 1,
                   }}
                 />
-                <Typography variant="caption" color={colors.grey[300]} fontSize={11}>
-                  Dot: 2019 (Click dot for details)
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    color: IMPROVED_COLOR, 
+                    fontWeight: 600, 
+                    fontSize: 11,
+                  }}
+                >
+                  Margin Improved
+                </Typography>
+              </Box>
+              <Box display="flex" alignItems="center" gap={0.5}>
+                <Box
+                  sx={{
+                    width: 24,
+                    height: 3,
+                    backgroundColor: DECLINED_COLOR,
+                    borderRadius: 1,
+                  }}
+                />
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    color: DECLINED_COLOR, 
+                    fontWeight: 600, 
+                    fontSize: 11,
+                  }}
+                >
+                  Margin Declined
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Right side - Time indicators */}
+            <Box display="flex" alignItems="center" gap={3}>
+              <Box display="flex" alignItems="center" gap={0.5}>
+                <Box
+                  sx={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    backgroundColor: '#e0e0e0',
+                    border: '2px solid #1a1a2e',
+                  }}
+                />
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    color: '#e0e0e0', 
+                    fontWeight: 600, 
+                    fontSize: 11 
+                  }}
+                >
+                  2019 Start
                 </Typography>
               </Box>
               <Box display="flex" alignItems="center" gap={0.5}>
@@ -292,15 +367,33 @@ const Dashboard = () => {
                   sx={{
                     width: 0,
                     height: 0,
-                    borderLeft: '5px solid transparent',
-                    borderRight: '5px solid transparent',
-                    borderBottom: `8px solid ${colors.redAccent[400]}`
+                    borderLeft: '6px solid transparent',
+                    borderRight: '6px solid transparent',
+                    borderBottom: '10px solid #e0e0e0',
                   }}
                 />
-                <Typography variant="caption" color={colors.grey[300]} fontSize={11}>
-                  Arrowhead: 2023
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    color: '#e0e0e0', 
+                    fontWeight: 600, 
+                    fontSize: 11 
+                  }}
+                >
+                  2023 End
                 </Typography>
               </Box>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: colors.grey[400], 
+                  fontSize: 10, 
+                  ml: 1,
+                  fontStyle: 'italic'
+                }}
+              >
+                Click any path for details
+              </Typography>
             </Box>
           </Box>
 

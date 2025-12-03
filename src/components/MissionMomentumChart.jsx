@@ -9,6 +9,10 @@ import OrganizationPopup from "./OrganizationPopup";
 const DEFAULT_MISSION = "E";
 const DEFAULT_CSV_URL = "/il_nonprofits_orgs.csv";
 
+// Performance color constants
+const IMPROVED_COLOR = "#4CAF50"; // Green for margin improvement
+const DECLINED_COLOR = "#EF5350"; // Red for margin decline
+
 function buildOrganizationDataForPopup(orgId, orgName, ntee_letter, city, rows) {
   const orgRow = rows.find(row => (row.ein || row.EIN) === orgId);
   if (!orgRow) {
@@ -144,9 +148,16 @@ const MissionMomentumChart = ({
   const [hover, setHover] = useState(null);
   const [pinnedTooltip, setPinnedTooltip] = useState(null);
   const [selectedOrg, setSelectedOrg] = useState(null);
+  
+  // Zoom state
+  const [zoomTransform, setZoomTransform] = useState(null);
+  const [isZoomed, setIsZoomed] = useState(false);
+  
+  // Removed: magnifierData state - no longer using small magnifier tooltip
 
   const containerRef = useRef(null);
   const rawRowsRef = useRef([]);
+  const zoomBehaviorRef = useRef(null);
 
   const missionLetter =
     (selectedMission && String(selectedMission).toUpperCase()) ||
@@ -194,12 +205,33 @@ const MissionMomentumChart = ({
   // Store the organization's position for tooltip placement
   const highlightedOrgPositionRef = useRef(null);
 
+  // FIX #1: Improved function to find organization by EIN or name
+  const findOrganization = useCallback((query, trajList) => {
+    if (!query || !trajList.length) return null;
+    
+    const normalizedQuery = String(query).trim().toLowerCase();
+    
+    // First try exact EIN match (convert both to string for comparison)
+    let org = trajList.find(t => 
+      String(t.orgId).trim().toLowerCase() === normalizedQuery
+    );
+    
+    // If not found, try partial name match
+    if (!org) {
+      org = trajList.find(t => 
+        t.orgName && t.orgName.toLowerCase().includes(normalizedQuery)
+      );
+    }
+    
+    return org;
+  }, []);
+
   // When highlightedEIN changes, find and select the mission
   useEffect(() => {
     if (highlightedEIN && trajectories.length > 0) {
-      const org = trajectories.find(t => String(t.orgId) === String(highlightedEIN));
+      const org = findOrganization(highlightedEIN, trajectories);
       if (org) {
-        console.log("Found EIN organization:", org.orgName, "Mission:", org.ntee_letter);
+        console.log("Found organization:", org.orgName, "Mission:", org.ntee_letter);
         if (org.ntee_letter && onEINMissionDetected) {
           onEINMissionDetected(org.ntee_letter);
         }
@@ -207,7 +239,7 @@ const MissionMomentumChart = ({
         // Store org info for use in the draw effect
         highlightedOrgPositionRef.current = org;
       } else {
-        console.log("EIN not found in trajectories:", highlightedEIN);
+        console.log("Organization not found:", highlightedEIN);
         highlightedOrgPositionRef.current = null;
       }
     } else {
@@ -215,7 +247,26 @@ const MissionMomentumChart = ({
       setPinnedTooltip(null);
       highlightedOrgPositionRef.current = null;
     }
-  }, [highlightedEIN, trajectories, onEINMissionDetected]);
+  }, [highlightedEIN, trajectories, onEINMissionDetected, findOrganization]);
+
+  // FIX #2: Reset zoom function - properly implemented
+  const resetZoom = useCallback(() => {
+    if (zoomBehaviorRef.current && containerRef.current) {
+      const svg = d3.select(containerRef.current).select("svg");
+      // First clear the state immediately to prevent re-rendering with old transform
+      setZoomTransform(null);
+      setIsZoomed(false);
+      // Then reset the D3 zoom transform with a transition
+      svg.transition()
+        .duration(300)
+        .call(zoomBehaviorRef.current.transform, d3.zoomIdentity)
+        .on("end", () => {
+          // Ensure state is cleared after transition completes
+          setZoomTransform(null);
+          setIsZoomed(false);
+        });
+    }
+  }, []);
 
   // Main draw effect
   useEffect(() => {
@@ -282,6 +333,14 @@ const MissionMomentumChart = ({
 
     const finalData = filteredData.length > 0 ? filteredData : data;
 
+    // Calculate margin improvement for each organization
+    finalData.forEach((org) => {
+      const first = org.points[0];
+      const last = org.points[org.points.length - 1];
+      org.marginImproved = last.margin_pct > first.margin_pct;
+      org.marginChange = last.margin_pct - first.margin_pct;
+    });
+
     const allRevenues = [];
     const finalMargins = [];
 
@@ -295,7 +354,7 @@ const MissionMomentumChart = ({
     const revExtent = d3.extent(allRevenues);
     const revPadding = (revExtent[1] - revExtent[0]) * 0.05;
 
-    const x = d3
+    const xBase = d3
       .scaleLinear()
       .domain([revExtent[0] - revPadding, revExtent[1] + revPadding])
       .nice()
@@ -304,20 +363,26 @@ const MissionMomentumChart = ({
     const margExtent = d3.extent(finalMargins);
     const margPadding = (margExtent[1] - margExtent[0]) * 0.1;
 
-    const y = d3
+    const yBase = d3
       .scaleLinear()
       .domain([margExtent[0] - margPadding, margExtent[1] + margPadding])
       .nice()
       .range([margin.top + innerHeight, margin.top]);
 
-    const startColor = colors.greenAccent[500];
-    const endColor = colors.redAccent[400];
+    // Apply zoom transform if exists
+    let x = xBase;
+    let y = yBase;
+    if (zoomTransform) {
+      x = zoomTransform.rescaleX(xBase);
+      y = zoomTransform.rescaleY(yBase);
+    }
 
     const defs = svg.append("defs");
 
+    // Create arrow markers for improved (green) and declined (red)
     defs
       .append("marker")
-      .attr("id", "mm-arrow")
+      .attr("id", "mm-arrow-improved")
       .attr("markerWidth", 6)
       .attr("markerHeight", 6)
       .attr("refX", 5)
@@ -325,39 +390,29 @@ const MissionMomentumChart = ({
       .attr("orient", "auto")
       .append("path")
       .attr("d", "M0,0 L0,5 L5,2.5 Z")
-      .attr("fill", endColor);
+      .attr("fill", IMPROVED_COLOR);
 
-    const gradientStrength = d3
-      .scaleLinear()
-      .domain(d3.extent(finalData.map((d) => d.points.length)))
-      .range([0.5, 1]);
+    defs
+      .append("marker")
+      .attr("id", "mm-arrow-declined")
+      .attr("markerWidth", 6)
+      .attr("markerHeight", 6)
+      .attr("refX", 5)
+      .attr("refY", 2.5)
+      .attr("orient", "auto")
+      .append("path")
+      .attr("d", "M0,0 L0,5 L5,2.5 Z")
+      .attr("fill", DECLINED_COLOR);
 
-    finalData.forEach((org, idx) => {
-      const gradId = `mm-grad-${idx}`;
-      const first = org.points[0];
-      const last = org.points[org.points.length - 1];
-
-      const g = defs
-        .append("linearGradient")
-        .attr("id", gradId)
-        .attr("gradientUnits", "userSpaceOnUse")
-        .attr("x1", x(first.log_revenue))
-        .attr("y1", y(first.margin_pct))
-        .attr("x2", x(last.log_revenue))
-        .attr("y2", y(last.margin_pct));
-
-      g.append("stop")
-        .attr("offset", "0%")
-        .attr("stop-color", startColor)
-        .attr("stop-opacity", 0.5);
-
-      g.append("stop")
-        .attr("offset", "100%")
-        .attr("stop-color", endColor)
-        .attr("stop-opacity", gradientStrength(org.points.length));
-
-      org.gradientId = gradId;
-    });
+    // Clip path for zooming
+    defs
+      .append("clipPath")
+      .attr("id", "chart-clip")
+      .append("rect")
+      .attr("x", margin.left)
+      .attr("y", margin.top)
+      .attr("width", innerWidth)
+      .attr("height", innerHeight);
 
     // Gridlines
     const grid = svg
@@ -428,7 +483,7 @@ const MissionMomentumChart = ({
           .text("Operating margin");
       });
 
-    const plot = svg.append("g");
+    const plot = svg.append("g").attr("clip-path", "url(#chart-clip)");
 
     const arcPath = (p0, p1) => {
       const sx = x(p0.log_revenue);
@@ -442,13 +497,16 @@ const MissionMomentumChart = ({
       return `M${sx},${sy} Q${mx},${my} ${tx},${ty}`;
     };
 
+    // Find highlighted org for search
+    const highlightedOrg = highlightedEIN ? findOrganization(highlightedEIN, finalData) : null;
+
     // Determine initial opacity based on highlightedEIN
     const getInitialOpacity = (d, type) => {
-      if (!highlightedEIN) return type === 'arc' ? 0.95 : 1;
-      return String(d.orgId) === String(highlightedEIN) ? (type === 'arc' ? 0.95 : 1) : 0.15;
+      if (!highlightedOrg) return type === 'arc' ? 0.85 : 1;
+      return d.orgId === highlightedOrg.orgId ? (type === 'arc' ? 0.95 : 1) : 0.15;
     };
 
-    // Arcs
+    // Arcs with performance-based coloring
     const arcs = plot
       .selectAll("path.mm-arc")
       .data(finalData)
@@ -456,16 +514,17 @@ const MissionMomentumChart = ({
       .attr("class", "mm-arc")
       .attr("fill", "none")
       .attr("stroke-width", 1.7)
-      .attr("stroke", (d) => `url(#${d.gradientId})`)
-      .attr("marker-end", "url(#mm-arrow)")
+      .attr("stroke", (d) => d.marginImproved ? IMPROVED_COLOR : DECLINED_COLOR)
+      .attr("marker-end", (d) => d.marginImproved ? "url(#mm-arrow-improved)" : "url(#mm-arrow-declined)")
       .attr("d", (d) => {
         const first = d.points[0];
         const last = d.points[d.points.length - 1];
         return arcPath(first, last);
       })
-      .attr("opacity", d => getInitialOpacity(d, 'arc'));
+      .attr("opacity", d => getInitialOpacity(d, 'arc'))
+      .style("cursor", "pointer");
 
-    // Starting dots
+    // Starting dots (always white)
     const dots = plot
       .selectAll("circle.mm-start")
       .data(finalData)
@@ -480,177 +539,303 @@ const MissionMomentumChart = ({
       .attr("opacity", d => getInitialOpacity(d, 'dot'))
       .style("cursor", "pointer");
 
-    // Arc event handlers - allow hover on other items while keeping searched EIN highlighted
-    arcs
-      .on("mouseenter", (event, d) => {
-        // Always allow hover highlights
+    // Shared click handler for opening popup - works on dot, arc, or arrow
+    const handleOrgClick = (event, d) => {
+      event.stopPropagation();
+      console.log("Organization clicked:", d.orgId, d.orgName);
+      
+      const popupData = buildOrganizationDataForPopup(
+        d.orgId,
+        d.orgName,
+        d.ntee_letter,
+        d.city,
+        rawRowsRef.current
+      );
+      
+      if (popupData && popupData.years && popupData.years.length > 0) {
+        setSelectedOrg(popupData);
+      }
+    };
+
+    // FIX #4: Updated hover handler to show only ONE tooltip - the detailed one
+    const handleHoverEnter = (event, d) => {
+      // CRITICAL: Don't show ANY hover effects if this org is already pinned from search
+      if (highlightedOrg && d.orgId === highlightedOrg.orgId) {
+        // Just highlight, but don't show any tooltip
         arcs.attr("opacity", (other) => {
-          if (String(other.orgId) === String(d.orgId)) return 0.95;
-          if (highlightedEIN && String(other.orgId) === String(highlightedEIN)) return 0.95;
+          if (other.orgId === d.orgId) return 0.95;
           return 0.15;
         });
         dots.attr("opacity", (other) => {
-          if (String(other.orgId) === String(d.orgId)) return 1;
-          if (highlightedEIN && String(other.orgId) === String(highlightedEIN)) return 1;
+          if (other.orgId === d.orgId) return 1;
           return 0.15;
         });
-        
-        // Show hover tooltip for current item
-        const first = d.points[0];
-        const last = d.points[d.points.length - 1];
-        setHover({
-          x: event.clientX,
-          y: event.clientY,
-          org: d.orgName || d.orgId,
-          startRev: first.log_revenue,
-          endRev: last.log_revenue,
-          startMargin: first.margin_pct,
-          endMargin: last.margin_pct,
-        });
-      })
-      .on("mousemove", (event, d) => {
-        // Update hover tooltip position
-        const first = d.points[0];
-        const last = d.points[d.points.length - 1];
-        setHover({
-          x: event.clientX,
-          y: event.clientY,
-          org: d.orgName || d.orgId,
-          startRev: first.log_revenue,
-          endRev: last.log_revenue,
-          startMargin: first.margin_pct,
-          endMargin: last.margin_pct,
-        });
-      })
-      .on("mouseleave", () => {
-        // Clear hover tooltip
-        setHover(null);
-        
-        // Restore opacity based on whether EIN is highlighted
-        if (highlightedEIN) {
-          arcs.attr("opacity", (d) => String(d.orgId) === String(highlightedEIN) ? 0.95 : 0.15);
-          dots.attr("opacity", (d) => String(d.orgId) === String(highlightedEIN) ? 1 : 0.15);
-        } else {
-          arcs.attr("opacity", 0.95);
-          dots.attr("opacity", 1);
-        }
+        return; // Exit early - no tooltip
+      }
+      
+      // Highlight this org
+      arcs.attr("opacity", (other) => {
+        if (other.orgId === d.orgId) return 0.95;
+        if (highlightedOrg && other.orgId === highlightedOrg.orgId) return 0.95;
+        return 0.15;
       });
+      dots.attr("opacity", (other) => {
+        if (other.orgId === d.orgId) return 1;
+        if (highlightedOrg && other.orgId === highlightedOrg.orgId) return 1;
+        return 0.15;
+      });
+      
+      const first = d.points[0];
+      const last = d.points[d.points.length - 1];
+      
+      // REMOVED: setMagnifierData - no longer showing small magnifier tooltip
+      
+      // Show ONLY the main hover tooltip with full details
+      setHover({
+        x: event.clientX,
+        y: event.clientY,
+        org: d.orgName || d.orgId,
+        ein: d.orgId,
+        startRev: first.log_revenue,
+        endRev: last.log_revenue,
+        startMargin: first.margin_pct,
+        endMargin: last.margin_pct,
+        marginImproved: d.marginImproved,
+      });
+    };
 
-    // Dot event handlers - allow hover on other items while keeping searched EIN highlighted
+    const handleHoverMove = (event, d) => {
+      // CRITICAL: Don't update hover tooltip if this is the pinned org
+      if (highlightedOrg && d.orgId === highlightedOrg.orgId) {
+        return; // Exit early
+      }
+      
+      const first = d.points[0];
+      const last = d.points[d.points.length - 1];
+      setHover({
+        x: event.clientX,
+        y: event.clientY,
+        org: d.orgName || d.orgId,
+        ein: d.orgId,
+        startRev: first.log_revenue,
+        endRev: last.log_revenue,
+        startMargin: first.margin_pct,
+        endMargin: last.margin_pct,
+        marginImproved: d.marginImproved,
+      });
+    };
+
+    const handleHoverLeave = () => {
+      // Clear only the hover tooltip (magnifier is no longer used)
+      setHover(null);
+      
+      if (highlightedOrg) {
+        arcs.attr("opacity", (d) => d.orgId === highlightedOrg.orgId ? 0.95 : 0.15);
+        dots.attr("opacity", (d) => d.orgId === highlightedOrg.orgId ? 1 : 0.15);
+      } else {
+        arcs.attr("opacity", 0.85);
+        dots.attr("opacity", 1);
+      }
+    };
+
+    // Arc event handlers - extended click behavior to full path
+    arcs
+      .on("mouseenter", handleHoverEnter)
+      .on("mousemove", handleHoverMove)
+      .on("mouseleave", handleHoverLeave)
+      .on("click", handleOrgClick);
+
+    // Dot event handlers
     dots
       .on("mouseenter", (event, d) => {
-        // Always allow hover highlights
-        arcs.attr("opacity", (other) => {
-          if (String(other.orgId) === String(d.orgId)) return 0.95;
-          if (highlightedEIN && String(other.orgId) === String(highlightedEIN)) return 0.95;
-          return 0.15;
-        });
-        dots.attr("opacity", (other) => {
-          if (String(other.orgId) === String(d.orgId)) return 1;
-          if (highlightedEIN && String(other.orgId) === String(highlightedEIN)) return 1;
-          return 0.15;
-        });
-        d3.select(event.currentTarget).attr("r", 5);
-        
-        // Show hover tooltip for current item
-        const first = d.points[0];
-        const last = d.points[d.points.length - 1];
-        setHover({
-          x: event.clientX,
-          y: event.clientY,
-          org: d.orgName || d.orgId,
-          startRev: first.log_revenue,
-          endRev: last.log_revenue,
-          startMargin: first.margin_pct,
-          endMargin: last.margin_pct,
-        });
+        handleHoverEnter(event, d);
+        // Don't enlarge if it's the pinned org to avoid visual confusion
+        if (!highlightedOrg || d.orgId !== highlightedOrg.orgId) {
+          d3.select(event.currentTarget).attr("r", 5);
+        }
       })
-      .on("mousemove", (event, d) => {
-        // Update hover tooltip position
-        const first = d.points[0];
-        const last = d.points[d.points.length - 1];
-        setHover({
-          x: event.clientX,
-          y: event.clientY,
-          org: d.orgName || d.orgId,
-          startRev: first.log_revenue,
-          endRev: last.log_revenue,
-          startMargin: first.margin_pct,
-          endMargin: last.margin_pct,
-        });
-      })
+      .on("mousemove", handleHoverMove)
       .on("mouseleave", (event) => {
-        // Clear hover tooltip
-        setHover(null);
+        handleHoverLeave();
         d3.select(event.currentTarget).attr("r", 3);
-        
-        // Restore opacity based on whether EIN is highlighted
-        if (highlightedEIN) {
-          arcs.attr("opacity", (d) => String(d.orgId) === String(highlightedEIN) ? 0.95 : 0.15);
-          dots.attr("opacity", (d) => String(d.orgId) === String(highlightedEIN) ? 1 : 0.15);
-        } else {
-          arcs.attr("opacity", 0.95);
-          dots.attr("opacity", 1);
-        }
       })
-      .on("click", (event, d) => {
-        event.stopPropagation();
-        console.log("Dot clicked:", d.orgId, d.orgName);
-        
-        const popupData = buildOrganizationDataForPopup(
-          d.orgId,
-          d.orgName,
-          d.ntee_letter,
-          d.city,
-          rawRowsRef.current
-        );
-        
-        if (popupData && popupData.years && popupData.years.length > 0) {
-          setSelectedOrg(popupData);
-        }
+      .on("click", handleOrgClick);
+
+    // Zoom behavior
+    const zoom = d3.zoom()
+      .scaleExtent([1, 10])
+      .translateExtent([[margin.left, margin.top], [margin.left + innerWidth, margin.top + innerHeight]])
+      .extent([[margin.left, margin.top], [margin.left + innerWidth, margin.top + innerHeight]])
+      .filter((event) => {
+        // Allow zoom on wheel, or when shift key is not pressed
+        return event.type === 'wheel' || event.type === 'dblclick' || !event.shiftKey;
+      })
+      .on("zoom", (event) => {
+        if (event.sourceEvent && event.sourceEvent.type === "brush") return;
+        setZoomTransform(event.transform);
+        setIsZoomed(event.transform.k > 1 || Math.abs(event.transform.x) > 0.1 || Math.abs(event.transform.y) > 0.1);
       });
 
+    zoomBehaviorRef.current = zoom;
+    
+    // Apply zoom to svg
+    svg.call(zoom);
+    
+    // Don't reapply old transform - let it reset naturally if zoomTransform is null
+
+    // Double-click to zoom in
+    svg.on("dblclick.zoom", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      
+      const [mouseX, mouseY] = d3.pointer(event);
+      
+      // Only zoom if clicking in the plot area
+      if (mouseX < margin.left || mouseX > margin.left + innerWidth ||
+          mouseY < margin.top || mouseY > margin.top + innerHeight) {
+        return;
+      }
+      
+      const currentK = zoomTransform ? zoomTransform.k : 1;
+      const newK = Math.min(currentK * 2, 10);
+      
+      // Calculate the point to center on
+      const transform = d3.zoomIdentity
+        .translate(svgWidth / 2, svgHeight / 2)
+        .scale(newK)
+        .translate(-mouseX, -mouseY);
+      
+      svg.transition().duration(300).call(zoom.transform, transform);
+    });
+
+    // Brush for rectangular selection zoom
+    const brush = d3.brush()
+      .extent([[margin.left, margin.top], [margin.left + innerWidth, margin.top + innerHeight]])
+      .on("end", (event) => {
+        if (!event.selection) return;
+        
+        const [[x0, y0], [x1, y1]] = event.selection;
+        
+        // Calculate zoom to fit selection
+        const dx = x1 - x0;
+        const dy = y1 - y0;
+        const scale = Math.min(innerWidth / dx, innerHeight / dy, 10);
+        const cx = (x0 + x1) / 2;
+        const cy = (y0 + y1) / 2;
+        
+        const transform = d3.zoomIdentity
+          .translate(svgWidth / 2, svgHeight / 2)
+          .scale(scale)
+          .translate(-cx, -cy);
+        
+        // Clear brush
+        svg.select(".brush").call(brush.move, null);
+        
+        // Apply zoom
+        svg.transition().duration(500).call(zoom.transform, transform);
+        
+        // Auto-hide brush after use
+        brushGroup.style("display", "none");
+        svg.call(zoom); // Re-enable zoom
+      });
+
+    // Add brush group (hidden by default, shown with shift key)
+    const brushGroup = svg.append("g")
+      .attr("class", "brush")
+      .style("display", "none")
+      .call(brush);
+
+    // Track shift key state
+    let shiftPressed = false;
+
+    // Show/hide brush on shift key
+    const handleKeyDown = (event) => {
+      if (event.key === "Shift" && !shiftPressed) {
+        shiftPressed = true;
+        brushGroup.style("display", null);
+        svg.on(".zoom", null); // Disable zoom while brushing
+      }
+    };
+
+    const handleKeyUp = (event) => {
+      if (event.key === "Shift") {
+        shiftPressed = false;
+        brushGroup.style("display", "none");
+        svg.call(zoom); // Re-enable zoom
+      }
+    };
+
+    // Handle window blur to reset brush if user switches windows while holding Shift
+    const handleWindowBlur = () => {
+      if (shiftPressed) {
+        shiftPressed = false;
+        brushGroup.style("display", "none");
+        svg.call(zoom);
+      }
+    };
+
+    // Handle click on chart to exit brush mode if stuck
+    const handleChartClick = (event) => {
+      // If brush is visible but shift is not pressed, hide it
+      if (brushGroup.style("display") !== "none" && !event.shiftKey) {
+        shiftPressed = false;
+        brushGroup.style("display", "none");
+        svg.call(zoom);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleWindowBlur);
+    svg.on("click.brush-reset", handleChartClick);
+
     // Add click handler to plot area to clear highlight
-    svg.on("click", () => {
+    svg.on("click", (event) => {
+      // Handle brush reset first
+      handleChartClick(event);
+      
+      // Don't clear if clicking on data elements
+      if (event.target.tagName === 'circle' || event.target.tagName === 'path') return;
+      
       if (highlightedEIN && onClearHighlight) {
         onClearHighlight();
       }
     });
 
     // Set tooltip position for highlighted EIN after scales are defined
-    if (highlightedEIN && highlightedOrgPositionRef.current) {
-      const org = highlightedOrgPositionRef.current;
-      const first = org.points[0];
-      const last = org.points[org.points.length - 1];
+    if (highlightedOrg) {
+      const first = highlightedOrg.points[0];
+      const last = highlightedOrg.points[highlightedOrg.points.length - 1];
       
-      // Get the SVG element's position on the page
       const svgRect = host.getBoundingClientRect();
-      
-      // Calculate the position of the end point (arrowhead) in SVG coordinates
       const endX = x(last.log_revenue);
       const endY = y(last.margin_pct);
-      
-      // Convert to page coordinates
       const pageX = svgRect.left + endX;
       const pageY = svgRect.top + endY;
-      
-      // Position tooltip to the right of the arrowhead
-      // Add offset to avoid covering the point
       const tooltipX = pageX + 15;
       const tooltipY = pageY - 30;
       
       setPinnedTooltip({
         x: tooltipX,
         y: tooltipY,
-        org: org.orgName || org.orgId,
+        org: highlightedOrg.orgName || highlightedOrg.orgId,
+        ein: highlightedOrg.orgId,
         startRev: first.log_revenue,
         endRev: last.log_revenue,
         startMargin: first.margin_pct,
         endMargin: last.margin_pct,
+        marginImproved: highlightedOrg.marginImproved,
       });
     }
+
+    // Cleanup
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
       
-  }, [status, trajectories, missionLetter, colors, highlightedEIN, onClearHighlight]);
+  }, [status, trajectories, missionLetter, colors, highlightedEIN, onClearHighlight, zoomTransform, findOrganization]);
 
   if (status === "loading") {
     return (
@@ -689,7 +874,9 @@ const MissionMomentumChart = ({
           position: "relative",
         }}
       >
-        {/* Pinned tooltip for searched EIN */}
+        {/* Removed: Magnifier tooltip - no longer displaying small tooltip on chart */}
+
+        {/* Pinned tooltip for searched org */}
         {pinnedTooltip && (
           <div
             style={{
@@ -699,28 +886,37 @@ const MissionMomentumChart = ({
               zIndex: 11,
               background: colors.primary[500],
               color: colors.grey[100],
-              border: `1px solid ${colors.grey[400]}`,
-              borderRadius: 4,
-              padding: "6px 10px",
+              border: `2px solid ${pinnedTooltip.marginImproved ? IMPROVED_COLOR : DECLINED_COLOR}`,
+              borderRadius: 6,
+              padding: "8px 12px",
               fontSize: 11,
-              boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.5)",
               pointerEvents: "none",
-              maxWidth: 260,
+              maxWidth: 280,
             }}
           >
             <div style={{ fontWeight: 600, marginBottom: 2 }}>
               {pinnedTooltip.org}
             </div>
+            <div style={{ fontSize: 10, color: colors.grey[300], marginBottom: 4 }}>
+              EIN: {pinnedTooltip.ein}
+            </div>
             <div>
               Log revenue: {pinnedTooltip.startRev.toFixed(2)} → {pinnedTooltip.endRev.toFixed(2)}
             </div>
-            <div>
-              Margin: {(pinnedTooltip.startMargin * 100).toFixed(1)}% → {(pinnedTooltip.endMargin * 100).toFixed(1)}%
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span>Margin: {(pinnedTooltip.startMargin * 100).toFixed(1)}% → {(pinnedTooltip.endMargin * 100).toFixed(1)}%</span>
+              <span style={{
+                color: pinnedTooltip.marginImproved ? IMPROVED_COLOR : DECLINED_COLOR,
+                fontWeight: 600
+              }}>
+                {pinnedTooltip.marginImproved ? "▲" : "▼"}
+              </span>
             </div>
           </div>
         )}
         
-        {/* Hover tooltip for other items */}
+        {/* Hover tooltip - FIX #4: Only show when not hovering over pinned org */}
         {hover && (
           <div
             style={{
@@ -730,26 +926,95 @@ const MissionMomentumChart = ({
               zIndex: 10,
               background: colors.primary[500],
               color: colors.grey[100],
-              border: `1px solid ${colors.grey[400]}`,
-              borderRadius: 4,
-              padding: "6px 10px",
+              border: `2px solid ${hover.marginImproved ? IMPROVED_COLOR : DECLINED_COLOR}`,
+              borderRadius: 6,
+              padding: "8px 12px",
               fontSize: 11,
-              boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.5)",
               pointerEvents: "none",
-              maxWidth: 260,
+              maxWidth: 280,
             }}
           >
             <div style={{ fontWeight: 600, marginBottom: 2 }}>
               {hover.org}
             </div>
+            <div style={{ fontSize: 10, color: colors.grey[300], marginBottom: 4 }}>
+              EIN: {hover.ein}
+            </div>
             <div>
               Log revenue: {hover.startRev.toFixed(2)} → {hover.endRev.toFixed(2)}
             </div>
-            <div>
-              Margin: {(hover.startMargin * 100).toFixed(1)}% → {(hover.endMargin * 100).toFixed(1)}%
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span>Margin: {(hover.startMargin * 100).toFixed(1)}% → {(hover.endMargin * 100).toFixed(1)}%</span>
+              <span style={{
+                color: hover.marginImproved ? IMPROVED_COLOR : DECLINED_COLOR,
+                fontWeight: 600
+              }}>
+                {hover.marginImproved ? "▲" : "▼"}
+              </span>
+            </div>
+            <div style={{ 
+              marginTop: 6, 
+              fontSize: 9, 
+              color: colors.grey[400],
+              borderTop: `1px solid ${colors.grey[600]}`,
+              paddingTop: 4
+            }}>
+              Click for full details
             </div>
           </div>
         )}
+
+        {/* FIX #2: Reset Zoom button - now functional */}
+        {isZoomed && (
+          <button
+            onClick={resetZoom}
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              background: colors.primary[500],
+              color: colors.grey[100],
+              border: `1px solid ${colors.grey[600]}`,
+              borderRadius: 4,
+              padding: "6px 10px",
+              fontSize: 10,
+              fontWeight: 500,
+              cursor: "pointer",
+              zIndex: 10,
+              height: "30px",
+              minWidth: "100px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <strong style={{ color: colors[400] }}>Reset Zoom</strong>
+          </button>
+        )}
+
+        {/* FIX #3: Zoom instructions repositioned to top right, near legends */}
+        <div
+          style={{
+            position: "absolute",
+            top: 8,
+            right: isZoomed ? 116 : 8,
+            fontSize: 10,
+            color: colors.grey[100],
+            background: colors.primary[500],
+            padding: "6px 10px",
+            borderRadius: 4,
+            zIndex: 5,
+            border: `1px solid ${colors.grey[600]}`,
+            fontWeight: 500,
+            height: "30px",
+            display: "flex",
+            alignItems: "center",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <strong style={{ color: colors[400] }}>Scroll to zoom  • Double-click to zoom in</strong>
+        </div>
       </div>
       
       {selectedOrg && (
