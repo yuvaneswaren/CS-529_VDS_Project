@@ -5,6 +5,9 @@ import { useTheme, Typography } from "@mui/material";
 import { tokens } from "../theme";
 import Papa from "papaparse";
 
+import { scaleLinear } from "d3-scale";
+import { interpolateBlues } from "d3-scale-chromatic";
+
 const NTEE_DESCRIPTIONS = {
   A: "Arts, Culture and Humanities",
   B: "Educational Institutions and Related Activities",
@@ -85,9 +88,6 @@ const NteeTreemap = ({
             })
           );
 
-          // Sort by value (size) in descending order
-          children.sort((a, b) => b.value - a.value);
-
           setTreeData({
             name: "NTEE - wise organizations count",
             children,
@@ -163,98 +163,51 @@ const NteeTreemap = ({
     );
   }
 
-  // Professional muted color palette - no flashy or neon colors
-  const modernColors = [
-    '#FFFFFF', // White
-    '#88C9A1', // Sage Green
-    '#B8A4C9', // Soft Purple
-    '#E8B563', // Warm Gold
-    '#D88B7C', // Terracotta
-    '#91C4D4', // Powder Blue
-    '#C79D9D', // Dusty Rose
-    '#D4A76A', // Bronze
-    '#7FA89F', // Seafoam
-    '#C8A8D4', // Lavender
-    '#9BB88D', // Olive Green
-    '#D9A27D', // Caramel
-    '#A696C8', // Periwinkle
-    '#88BDBC', // Teal Muted
-    '#D6B877', // Sandy Gold
-    '#C48B8B', // Mauve
-    '#79A3A3', // Slate Teal
-    '#B89DC9', // Lilac
-    '#D4C27A', // Wheat
-    '#A5988E', // Taupe
-    '#8FA3B8', // Steel Blue
-    '#7FA89F', // Sage Teal
-    '#B68BA8', // Plum
-    '#9A8C7A', // Warm Grey
-    '#94A8B3', // Slate Grey
-    '#B3A084', // Sand
-    '#C9B2D4', // Orchid
-  ];
+  const maxValue = Math.max(
+    ...treeData.children.map((c) => c.value || 0),
+    0
+  );
+
+  const colorScale =
+    maxValue > 0
+      ? scaleLinear()
+          .domain([1, maxValue])
+          .range([interpolateBlues(0.6), interpolateBlues(0.95)])
+      : () => colors.primary[500];
 
   return (
-    <div style={{ width: "100%", height: "100%", background: "transparent", position: "relative" }}>
-      {/* Instruction label matching MissionMomentumChart exact styling - positioned at right end of treemap */}
-      <div
-        style={{
-          position: "absolute",
-          top: "50%",
-          right: 8,
-          transform: "translateY(-450%)",
-          fontSize: 10,
-          color: colors.grey[100],
-          background: colors.primary[500],
-          padding: "6px 10px",
-          borderRadius: 4,
-          zIndex: 10,
-          border: `1px solid ${colors.grey[600]}`,
-          fontWeight: 500,
-          height: "30px",
-          display: "flex",
-          alignItems: "center",
-          whiteSpace: "nowrap",
-          pointerEvents: "none",
-        }}
-      >
-        <strong style={{ color: colors[400] }}>Click any category to filter</strong>
-      </div>
-
+    <div style={{ width: "100%", height: "100%" }}>
       <ResponsiveTreeMap
         data={treeData}
         identity="name"
         value="value"
-        margin={{ top: 5, right: 5, bottom: 5, left: 5 }}
-        innerPadding={2}
-        outerPadding={2}
-        label={(node) => {
-          // Hide labels only for D, C, K, and R categories
-          const hiddenCategories = ['D', 'C', 'K', 'R'];
-          if (hiddenCategories.includes(node.data.name)) {
-            return '';
-          }
-          return getShortLabel(node.data.name);
+        margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
+        innerPadding={3}
+        outerPadding={3}
+        label={(node) => getShortLabel(node.data.name)}
+        labelSkipSize={22}
+        labelTextColor={{
+          from: "color",
+          modifiers: [["darker", 6]],
         }}
-        labelSkipSize={40}
-        labelTextColor="#000000"
         parentLabelPosition="left"
         parentLabelPadding={4}
-        parentLabelTextColor="#000000"
-        colors={modernColors}
+        parentLabelTextColor={{
+          from: "color",
+          modifiers: [["darker", 3]],
+        }}
+        colors={{ scheme: "green_blue" }}
         nodeOpacity={1}
         borderWidth={(node) =>
-          selectedMission && node.data.name === selectedMission ? 8 : 0
+          selectedMission && node.data.name === selectedMission ? 3 : 1
         }
-        borderColor={(node) => {
-          if (selectedMission && node.data.name === selectedMission) {
-            return '#000000'; // Black border for selection
-          }
-          return 'transparent'; // No border for unselected
-        }}
+        borderColor={(node) =>
+          selectedMission && node.data.name === selectedMission
+            ? colors.grey[100]
+            : colors.grey[800]
+        }
         theme={{
-          background: 'transparent',
-          textColor: '#000000',
+          textColor: colors.grey[100],
           tooltip: {
             container: {
               background: colors.primary[500],
@@ -283,7 +236,7 @@ const NteeTreemap = ({
                 fontSize: 12,
                 fontFamily:
                   "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-                boxShadow: "0 12px 18px rgba(0,0,0,0.45)",
+                boxShadow: "0 8px 18px rgba(0,0,0,0.45)",
                 pointerEvents: "none",
                 maxWidth: 260,
                 lineHeight: 1.4,
@@ -311,15 +264,6 @@ const NteeTreemap = ({
           }
         }}
       />
-      
-      {/* Add global style for pointer cursor on all treemap rectangles */}
-      <style>
-        {`
-          div[role="treemap"] rect {
-            cursor: pointer !important;
-          }
-        `}
-      </style>
     </div>
   );
 };
