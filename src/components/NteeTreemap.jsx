@@ -152,10 +152,11 @@ const NteeTreemap = ({
         tile="squarify"
         label={(node) => getShortLabel(node.data.name)}
         labelSkipSize={18}
-        labelTextColor={{
-          from: "color",
-          modifiers: [["brighter", 8]],
-        }}
+        // labelTextColor={{
+        //   from: "color",
+        //   modifiers: [["brighter", 8]],
+        // }}
+        labelTextColor="#FFFFFF"
         parentLabelPosition="left"
         parentLabelPadding={4}
         parentLabelTextColor={{
